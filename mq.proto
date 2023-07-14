@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+option go_package = "./core";
+
+package MQ;
+
+// Interface exported by the server.
+service MQEndpoints {
+    rpc GetMessages(RequestMessageData) returns (MessageCollection) {}
+    rpc SubmitMessage(MessageInfo) returns (Status) {}
+    rpc CreateQueue(QueueInfo) returns (Status) {}
+    rpc Ack(AckUpdate) returns (Status) {}
+    rpc Login(Credentials) returns (Status) {}
+    rpc ChangePassword(ChangeCredentials) returns (Status) {}
+    rpc Nack(AckUpdate) returns (Status) {}
+    rpc DeleteQueue(DeleteQueueInfo) returns (Status) {}
+    rpc AddRoutingKey(AddRoute) returns (Status) {}
+    rpc DeleteRoutingKey(DeleteRoute) returns (Status) {}
+    rpc CreateUser(UserCreds) returns (Status) {}
+    rpc SubmitBatchedMessages(BatchMessages) returns (Status) {}
+    rpc IsLeaderNode(LeaderNodeRequest) returns (Status) {}
+    rpc DeleteUser(UserInformation) returns (Status) {} 
+    rpc BatchAck(BatchAckUpdate) returns (Status) {} 
+    rpc BatchNack(BatchNackUpdate) returns (Status) {} 
+}
+
+message MessageInfo {
+  string routingKey = 1;
+  bytes data = 2;
+}
+
+message MessageData {
+    bytes id = 1;
+    bytes data = 2;
+}  
+
+message MessageCollection {
+    repeated MessageData messages = 1;
+}  
+
+message RequestMessageData {
+    string queueName = 1;
+    uint32 amount = 2;
+}
+
+message Status {
+    bool status = 1;
+}
+
+message QueueInfo {
+    string routingKey = 1;
+    string name = 2;
+    uint32 size = 3;
+}
+
+message AckUpdate {
+    string queueName = 1;
+    bytes id = 2;
+}
+
+message Credentials {
+    string username = 1;
+    string password = 2;
+}
+
+message ChangeCredentials {
+    string username = 1;
+    string oldPassword = 2;
+    string newPassword = 3;
+}
+
+message DeleteQueueInfo {
+    string queueName = 1;
+}
+
+message AddRoute {
+    string queueName = 1;
+    string routeName = 2;
+}
+
+message DeleteRoute {
+    string queueName = 1;
+    string routeName = 2;
+}
+
+message UserCreds {
+    string username = 1;
+    string password = 2;
+}
+
+message BatchMessages {
+    repeated MessageInfo messages = 1;
+}
+
+message LeaderNodeRequest {}
+
+message UserInformation {
+    string username = 1;
+}
+
+message BatchAckUpdate {
+    string queueName = 1;
+    repeated bytes id = 2;
+}
+
+message BatchNackUpdate {
+    string queueName = 1;
+    repeated bytes ids = 2;
+}

@@ -1,0 +1,5 @@
+node_*
+.git*
+mq*
+*.md
+scripts

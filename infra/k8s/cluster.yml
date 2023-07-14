@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-1
+spec:
+  selector:
+    app: node-1
+  ports:
+    - protocol: TCP
+      port: 2221
+      targetPort: 2221
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-1
+spec:
+  containers:
+    - name: sybline
+      image: sybline
+      env:
+        - name: SERVER_PORT
+          value: "2221"
+        - name: RAFT_NODE_ID
+          value: node1
+        - name: RAFT_PORT
+          value: "1111"
+        - name: RAFT_VOL_DIR
+          value: node_data
+        - name: TLS
+          value: "false"
+        - name: CERT_FILE
+          value: ""
+        - name: KEY_FILE
+          value: ""
+        - name: NODES
+          value: node2,node3
+        - name: ADDRESSES
+          value: node-2:1111,node-3:1111
+        - name: BATCH_LIMIT
+          value: "10000"
+        - name: SNAPSHOT_THRESHOLD
+          value: "20000"
+        - name: SNAPSHOT_RETENTION_COUNT
+          value: "3"
+        - name: CACHE_LIMIT
+          value: "500"
+        - name: HOST_IP
+          value: node-1
+      volumeMounts:
+        - name: node-1-data
+          mountPath: /node_data
+      resources:
+        limits:
+          memory: 2000Mi
+          cpu: 500m
+  volumes:
+    - name: node-1-data
+      hostPath:
+        path: /path/to/node_1_data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-2
+spec:
+  selector:
+    app: node-2
+  ports:
+    - protocol: TCP
+      port: 2222
+      targetPort: 2221
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-2
+spec:
+  containers:
+    - name: sybline
+      image: sybline
+      env:
+        - name: SERVER_PORT
+          value: "2221"
+        - name: RAFT_NODE_ID
+          value: node2
+        - name: RAFT_PORT
+          value: "1111"
+        - name: RAFT_VOL_DIR
+          value: node_data
+        - name: TLS
+          value: "false"
+        - name: CERT_FILE
+          value: ""
+        - name: KEY_FILE
+          value: ""
+        - name: NODES
+          value: node1,node3
+        - name: ADDRESSES
+          value: node-1:1111,node-3:1111
+        - name: BATCH_LIMIT
+          value: "10000"
+        - name: SNAPSHOT_THRESHOLD
+          value: "20000"
+        - name: SNAPSHOT_RETENTION_COUNT
+          value: "3"
+        - name: CACHE_LIMIT
+          value: "500"
+        - name: HOST_IP
+          value: node-2
+      volumeMounts:
+        - name: node-2-data
+          mountPath: /node_data
+      resources:
+        limits:
+          memory: 2000Mi
+          cpu: 500m
+  volumes:
+    - name: node-2-data
+      hostPath:
+        path: /path/to/node_2_data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-3
+spec:
+  selector:
+    app: node-3
+  ports:
+    - protocol: TCP
+      port: 2223
+      targetPort: 2221
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-3
+spec:
+  containers:
+    - name: sybline
+      image: sybline
+      env:
+        - name: SERVER_PORT
+          value: "2221"
+        - name: RAFT_NODE_ID
+          value: node3
+        - name: RAFT_PORT
+          value: "1111"
+        - name: RAFT_VOL_DIR
+          value: node_data
+        - name: TLS
+          value: "false"
+        - name: CERT_FILE
+          value: ""
+        - name: KEY_FILE
+          value: ""
+        - name: NODES
+          value: node1,node2
+        - name: ADDRESSES
+          value: node-1:1111,node-2:1111
+        - name: BATCH_LIMIT
+          value: "10000"
+        - name: SNAPSHOT_THRESHOLD
+          value: "20000"
+        - name: SNAPSHOT_RETENTION_COUNT
+          value: "3"
+        - name: CACHE_LIMIT
+          value: "500"
+        - name: HOST_IP
+          value: node-3
+      volumeMounts:
+        - name: node-3-data
+          mountPath: /node_data
+      resources:
+        limits:
+          memory: 2000Mi
+          cpu: 500m
+  volumes:
+    - name: node-3-data
+      hostPath:
+        path: /path/to/node_3_data

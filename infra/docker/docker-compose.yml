@@ -1,0 +1,124 @@
+version: '3.1'
+
+services:
+  session:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - ./cache:/data
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.3
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  node_1:
+    image: greedykomodo/sybline:latest
+    hostname: node_1
+    mem_limit: 1000m
+    environment:
+      - SERVER_PORT=2221
+      - RAFT_NODE_ID=node1
+      - RAFT_PORT=1111
+      - RAFT_VOL_DIR=node_data
+      - TLS_ENABLED=false
+      - NODES=node2,node3
+      - ADDRESSES=node_2:1111,node_3:1111
+      - BATCH_LIMIT=10000
+      - SNAPSHOT_THRESHOLD=20000
+      - SNAPSHOT_RETENTION_COUNT=3
+      - CACHE_LIMIT=500
+      - HOST_IP=node_1
+      - REDIS_IP=session:6379
+      - TOKEN_DURATION=1800
+      - SALT=salty
+
+    volumes:
+      - './node_1_data:/app/node_data'
+      - './cert:/cert'
+    ports:
+      - 2221:2221
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.4
+    depends_on:
+      session:
+        condition: service_healthy
+
+  node_2:
+    image: greedykomodo/sybline:latest
+    hostname: node_2
+    mem_limit: 1000m
+    environment:
+      - SERVER_PORT=2221
+      - RAFT_NODE_ID=node2
+      - RAFT_PORT=1111
+      - RAFT_VOL_DIR=node_data
+      - TLS_ENABLED=false
+      - NODES=node1,node3
+      - ADDRESSES=node_1:1111,node_3:1111
+      - BATCH_LIMIT=10000
+      - SNAPSHOT_THRESHOLD=20000
+      - SNAPSHOT_RETENTION_COUNT=3
+      - CACHE_LIMIT=500
+      - HOST_IP=node_2
+      - REDIS_IP=session:6379
+      - TOKEN_DURATION=1800
+      - SALT=salty
+    volumes:
+      - './node_2_data:/node_data'
+      - './cert:/cert'
+    ports:
+      - 2222:2221
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.5
+    depends_on:
+      session:
+        condition: service_healthy
+
+  node_3:
+    image: greedykomodo/sybline:latest
+    hostname: node_3
+    mem_limit: 1000m
+    environment:
+      - SERVER_PORT=2221
+      - RAFT_NODE_ID=node3
+      - RAFT_PORT=1111
+      - RAFT_VOL_DIR=node_data
+      - TLS_ENABLED=false
+      - NODES=node1,node2
+      - ADDRESSES=node_1:1111,node_2:1111
+      - BATCH_LIMIT=10000
+      - SNAPSHOT_THRESHOLD=20000
+      - SNAPSHOT_RETENTION_COUNT=3
+      - CACHE_LIMIT=500
+      - HOST_IP=node_3
+      - REDIS_IP=session:6379
+      - TOKEN_DURATION=1800
+      - SALT=salty
+    volumes:
+      - './node_3_data:/node_data'
+      - './cert:/cert'
+    ports:
+      - 2223:2221
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.6
+    depends_on:
+      session:
+        condition: service_healthy
+
+networks:
+  webnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
