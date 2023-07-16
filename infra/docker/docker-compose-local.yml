@@ -30,8 +30,8 @@ services:
       - TLS_ENABLED=false
       - NODES=node2,node3
       - ADDRESSES=node_2:1111,node_3:1111
-      - BATCH_LIMIT=10000
-      - SNAPSHOT_THRESHOLD=20000
+      - BATCH_LIMIT=30000
+      - SNAPSHOT_THRESHOLD=60000
       - SNAPSHOT_RETENTION_COUNT=3
       - CACHE_LIMIT=500
       - HOST_IP=node_1
@@ -62,8 +62,8 @@ services:
       - TLS_ENABLED=false
       - NODES=node1,node3
       - ADDRESSES=node_1:1111,node_3:1111
-      - BATCH_LIMIT=10000
-      - SNAPSHOT_THRESHOLD=20000
+      - BATCH_LIMIT=30000
+      - SNAPSHOT_THRESHOLD=60000
       - SNAPSHOT_RETENTION_COUNT=3
       - CACHE_LIMIT=500
       - HOST_IP=node_2
@@ -94,8 +94,8 @@ services:
       - TLS_ENABLED=false
       - NODES=node1,node2
       - ADDRESSES=node_1:1111,node_2:1111
-      - BATCH_LIMIT=10000
-      - SNAPSHOT_THRESHOLD=20000
+      - BATCH_LIMIT=30000
+      - SNAPSHOT_THRESHOLD=60000
       - SNAPSHOT_RETENTION_COUNT=3
       - CACHE_LIMIT=500
       - HOST_IP=node_3

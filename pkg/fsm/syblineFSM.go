@@ -305,6 +305,9 @@ func (b syblineFSM) Snapshot() (raft.FSMSnapshot, error) {
 }
 
 func (b syblineFSM) getSnapshotData() ([]byte, error) {
+	b.store.LogMux.Lock()
+	defer b.store.LogMux.Unlock()
+
 	data := []byte{}
 
 	lastIndex, err := b.store.LastIndex()
