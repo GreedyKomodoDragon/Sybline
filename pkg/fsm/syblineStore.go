@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sybline/pkg/utils"
@@ -48,7 +47,7 @@ type SyblineStore struct {
 	logs      map[uint64]*raft.Log
 	batchRate uint64
 	currBatch uint64
-	logMux    *sync.Mutex
+	LogMux    *sync.Mutex
 	mapLock   *sync.RWMutex
 }
 
@@ -63,7 +62,7 @@ func NewStableStore(batchRate uint64) *SyblineStore {
 		logs:      map[uint64]*raft.Log{},
 		batchRate: batchRate,
 		currBatch: 0,
-		logMux:    &sync.Mutex{},
+		LogMux:    &sync.Mutex{},
 		mapLock:   &sync.RWMutex{},
 	}
 }
@@ -210,16 +209,16 @@ func (s *SyblineStore) StoreLogs(logs []*raft.Log) error {
 		s.StoreLog(log)
 	}
 
-	go s.persistLog(logs) // push to non-blocking thread
+	go s.persistLog(len(logs)) // push to non-blocking thread
 	return nil
 }
 
 // writes the current batch of logs to disk
-func (s *SyblineStore) persistLog(logs []*raft.Log) error {
-	s.logMux.Lock()
-	defer s.logMux.Unlock()
+func (s *SyblineStore) persistLog(amount int) error {
+	s.LogMux.Lock()
+	defer s.LogMux.Unlock()
 
-	s.currBatch += uint64(len(logs))
+	s.currBatch += uint64(amount)
 
 	// escape early if not ready to be push to cache
 	if s.currBatch < s.batchRate {
@@ -258,17 +257,26 @@ func (s *SyblineStore) persistLog(logs []*raft.Log) error {
 
 	// name of file
 	nextStart += 1
-	last -= 1
+	last -= 501
 
 	// happens when node is restarting
 	if nextStart >= last {
 		return nil
 	}
 
-	increments := incrementSlice(nextStart, last, s.batchRate)
-	for k := 0; k < len(increments)-1; k++ {
-		lower := increments[k]
-		upper := increments[k+1]
+	for k := nextStart; k <= last; k += s.batchRate {
+		lower := k
+		upper := k + s.batchRate
+		if upper > last {
+			upper = last
+		} else {
+			upper--
+		}
+
+		if upper-lower < 500 {
+			break
+		}
+
 		filename := fmt.Sprintf(FILE_FORMAT, lower, upper)
 
 		f, err := os.Create(filename)
@@ -283,6 +291,7 @@ func (s *SyblineStore) persistLog(logs []*raft.Log) error {
 
 		for i := lower; i <= upper; i++ {
 			if err := s.GetLog(i, log); err != nil {
+				fmt.Println("err:", err, "log:", s.logs[i])
 				return err
 			}
 
@@ -298,8 +307,7 @@ func (s *SyblineStore) persistLog(logs []*raft.Log) error {
 		}
 
 		// delete logs after
-		s.DeleteRange(lower, upper)
-		runtime.GC()
+		s.deleteRange(lower, upper)
 	}
 
 	return nil
@@ -307,6 +315,10 @@ func (s *SyblineStore) persistLog(logs []*raft.Log) error {
 
 // DeleteRange deletes a range of log entries. The range is inclusive.
 func (s *SyblineStore) DeleteRange(min, max uint64) error {
+	return nil
+}
+
+func (s *SyblineStore) deleteRange(min, max uint64) error {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 
@@ -379,25 +391,4 @@ func uint64ToBytes(u uint64) []byte {
 // Converts bytes to an integer
 func bytesToUint64(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
-}
-
-func incrementSlice(start, finish, increment uint64) []uint64 {
-	var count uint64
-	if finish < start {
-		count = 0
-	} else {
-		count = (finish-start)/increment + 1
-	}
-
-	result := make([]uint64, count)
-	var i uint64 = 0
-	for i = 0; i < count-1; i++ {
-		result[i] = start + i*increment
-	}
-
-	if count > 0 {
-		result[count-1] = finish
-	}
-
-	return result
 }
