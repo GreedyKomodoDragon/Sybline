@@ -217,17 +217,17 @@ func main() {
 		batchLimit = 1000
 	}
 
-	store := fsm.NewStableStore(batchLimit)
-
-	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan, store)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// Wrap the store in a LogCache to improve performance.
 	cacheLimit := v.GetInt(CACHE_LIMIT)
 	if cacheLimit == 0 {
 		cacheLimit = 100
+	}
+
+	store := fsm.NewStableStore(batchLimit, uint64(cacheLimit))
+
+	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan, store)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	cacheStore, err := raft.NewLogCache(cacheLimit, store)

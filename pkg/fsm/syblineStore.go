@@ -49,9 +49,10 @@ type SyblineStore struct {
 	currBatch uint64
 	LogMux    *sync.Mutex
 	mapLock   *sync.RWMutex
+	logCache  uint64
 }
 
-func NewStableStore(batchRate uint64) *SyblineStore {
+func NewStableStore(batchRate, logCache uint64) *SyblineStore {
 	return &SyblineStore{
 		records: []*record{
 			{
@@ -257,7 +258,7 @@ func (s *SyblineStore) persistLog(amount int) error {
 
 	// name of file
 	nextStart += 1
-	last -= 501
+	last -= s.logCache + 1
 
 	// happens when node is restarting
 	if nextStart >= last {
@@ -273,7 +274,7 @@ func (s *SyblineStore) persistLog(amount int) error {
 			upper--
 		}
 
-		if upper-lower < 500 {
+		if upper-lower < s.logCache {
 			break
 		}
 
@@ -291,7 +292,6 @@ func (s *SyblineStore) persistLog(amount int) error {
 
 		for i := lower; i <= upper; i++ {
 			if err := s.GetLog(i, log); err != nil {
-				fmt.Println("err:", err, "log:", s.logs[i])
 				return err
 			}
 
