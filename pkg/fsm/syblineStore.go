@@ -274,7 +274,7 @@ func (s *SyblineStore) persistLog(amount int) error {
 			upper--
 		}
 
-		if upper-lower < 500 {
+		if upper-lower < s.logCache {
 			break
 		}
 
@@ -292,7 +292,6 @@ func (s *SyblineStore) persistLog(amount int) error {
 
 		for i := lower; i <= upper; i++ {
 			if err := s.GetLog(i, log); err != nil {
-				fmt.Println("err:", err, "log:", s.logs[i])
 				return err
 			}
 
