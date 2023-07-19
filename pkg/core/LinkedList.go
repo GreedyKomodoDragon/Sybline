@@ -35,6 +35,7 @@ type ListNode struct {
 	Next       *ListNode
 	ConsumerID []byte
 	time       int64
+	fetched    uint32
 }
 
 func (n *ListNode) Reset() {
@@ -43,21 +44,24 @@ func (n *ListNode) Reset() {
 	n.Next = nil
 	n.ConsumerID = nil
 	n.time = 0
+	n.fetched = 0
 }
 
 // LinkedList represents a singly linked list.
 type LinkedList struct {
-	Head    *ListNode
-	Tail    *ListNode
-	Amount  Counter
-	cap     uint32
-	mutex   *sync.Mutex
-	nodeTTL int64
-	objPool *NodeObjectPool
+	Head       *ListNode
+	Tail       *ListNode
+	Amount     Counter
+	cap        uint32
+	mutex      *sync.Mutex
+	nodeTTL    int64
+	objPool    *NodeObjectPool
+	deadLetter *Queue
+	fetchLimit uint32
 }
 
 // creates a queue
-func NewQueue(size uint32, nodeTTL int64) Queue {
+func NewQueue(size, fetchLimit uint32, nodeTTL int64, deadLetter *Queue) Queue {
 	objPool := NewNodeObjectPool(int(size))
 
 	return &LinkedList{
@@ -66,9 +70,11 @@ func NewQueue(size uint32, nodeTTL int64) Queue {
 			count: 0,
 			lock:  &sync.Mutex{},
 		},
-		mutex:   &sync.Mutex{},
-		nodeTTL: nodeTTL,
-		objPool: objPool,
+		mutex:      &sync.Mutex{},
+		nodeTTL:    nodeTTL,
+		objPool:    objPool,
+		deadLetter: deadLetter,
+		fetchLimit: fetchLimit,
 	}
 }
 
@@ -149,16 +155,47 @@ func (ll *LinkedList) Unlock(consumerID []byte, id []byte) bool {
 	ll.mutex.Lock()
 	defer ll.mutex.Unlock()
 
+	var prev *ListNode = nil
 	current := ll.Head
 	for current != nil {
 		if bytes.Equal(current.ID, id) {
 			if bytes.Equal(current.ConsumerID, consumerID) {
 				current.ConsumerID = NO_CONSUMER
+				current.fetched++
+
+				if current.fetched < ll.fetchLimit {
+					return true
+				}
+
+				if ll.deadLetter != nil {
+					(*ll.deadLetter).Enqueue(current.ID, current.Val)
+				}
+
+				if current == ll.Tail && current == ll.Head {
+					ll.Head = nil
+					ll.Tail = nil
+				} else if current == ll.Tail {
+					ll.Tail = prev
+					ll.Tail.Next = nil
+				} else if current == ll.Head {
+					ll.Head = current.Next
+				} else {
+					prev.Next = current.Next
+				}
+
+				old := current
+				old.Reset()
+				ll.objPool.ReleaseObject(old)
+
+				ll.Amount.Decrement()
+
 				return true
 			}
 
-			return false
+			break
 		}
+
+		prev = current
 		current = current.Next
 	}
 
@@ -316,6 +353,11 @@ func (ll *LinkedList) UnlockAndEmptyBatch(consumerID []byte, ids [][]byte) error
 	return nil
 }
 
+type pairNode struct {
+	prev    *ListNode
+	current *ListNode
+}
+
 func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 	ll.mutex.Lock()
 	defer ll.mutex.Unlock()
@@ -328,16 +370,22 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 		return fmt.Errorf("could not all ids to ack, queue less than length of ids")
 	}
 
-	nodes := []*ListNode{}
+	nodes := []pairNode{}
 	if bytes.Equal(ll.Head.ConsumerID, consumerID) && byteSliceExists(ids, ll.Head.ID) {
-		nodes = append(nodes, ll.Head)
+		nodes = append(nodes, pairNode{
+			prev:    nil,
+			current: ll.Head,
+		})
 	}
 
 	current := ll.Head.Next
-
+	prev := ll.Head
 	for current != nil && len(nodes) < len(ids) {
 		if bytes.Equal(current.ConsumerID, consumerID) && byteSliceExists(ids, current.ID) {
-			nodes = append(nodes, current)
+			nodes = append(nodes, pairNode{
+				prev:    prev,
+				current: current,
+			})
 		}
 
 		current = current.Next
@@ -347,8 +395,35 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 		return fmt.Errorf("could not all ids to nack")
 	}
 
-	for _, node := range nodes {
-		node.ConsumerID = NO_CONSUMER
+	for _, nodePair := range nodes {
+		nodePair.current.ConsumerID = NO_CONSUMER
+		nodePair.current.fetched++
+
+		if nodePair.current.fetched < ll.fetchLimit {
+			continue
+		}
+
+		if ll.deadLetter != nil {
+			(*ll.deadLetter).Enqueue(nodePair.current.ID, nodePair.current.Val)
+		}
+
+		if nodePair.current == ll.Tail && nodePair.current == ll.Head {
+			ll.Head = nil
+			ll.Tail = nil
+		} else if nodePair.current == ll.Tail {
+			ll.Tail = nodePair.prev
+			ll.Tail.Next = nil
+		} else if nodePair.current == ll.Head {
+			ll.Head = nodePair.current.Next
+		} else {
+			nodePair.prev.Next = nodePair.current.Next
+		}
+
+		old := nodePair.current
+		old.Reset()
+		ll.objPool.ReleaseObject(old)
+
+		ll.Amount.Decrement()
 	}
 
 	return nil

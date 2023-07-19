@@ -67,7 +67,9 @@ func (q queueManager) CreateQueue(name string, size uint32) error {
 		return ErrQueueAlreadyExists
 	}
 
-	q.queues[name] = NewQueue(size, q.nodeTTL)
+	dlq := NewQueue(size, 3, q.nodeTTL, nil)
+	q.queues[name+"-dlq"] = dlq
+	q.queues[name] = NewQueue(size, 3, q.nodeTTL, &dlq)
 
 	return nil
 }
