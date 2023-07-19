@@ -1,4 +1,4 @@
-<img src="./images/logo_full.svg" style="max-width: 350px; margin-bottom:30px"/>
+<img src="./images/logo_full.svg" width="450"/>
 
 Sybline is a message broker providing a reliable way to handle message queues. It uses gRPC to communicate with other services and applications. 
 
