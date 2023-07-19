@@ -1,6 +1,6 @@
-# Sybline
+<img src="./images/logo_full.svg"/>
 
-This messaging broker, called Sybline, is written in Go and provides reliable way to handle message queues. It uses gRPC to communicate with other services and applications. 
+Sybline is a message broker providing a reliable way to handle message queues. It uses gRPC to communicate with other services and applications. 
 
 The Sybline broker aims to provide features such as message persistence, routing, and delivery guarantees. Designed to be lightweight and easy to deploy. Sybline uses Raft Consensus to ensure High Availability(HA).
 
