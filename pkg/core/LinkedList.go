@@ -163,31 +163,11 @@ func (ll *LinkedList) Unlock(consumerID []byte, id []byte) bool {
 				current.ConsumerID = NO_CONSUMER
 				current.fetched++
 
-				if current.fetched < ll.fetchLimit {
-					return true
+				if current.fetched >= ll.fetchLimit {
+					ll.handleThresholdExpire(prev, current)
+					ll.objPool.ReleaseObject(current)
+					ll.Amount.Decrement()
 				}
-
-				if ll.deadLetter != nil {
-					(*ll.deadLetter).Enqueue(current.ID, current.Val)
-				}
-
-				if current == ll.Tail && current == ll.Head {
-					ll.Head = nil
-					ll.Tail = nil
-				} else if current == ll.Tail {
-					ll.Tail = prev
-					ll.Tail.Next = nil
-				} else if current == ll.Head {
-					ll.Head = current.Next
-				} else {
-					prev.Next = current.Next
-				}
-
-				old := current
-				old.Reset()
-				ll.objPool.ReleaseObject(old)
-
-				ll.Amount.Decrement()
 
 				return true
 			}
@@ -216,11 +196,9 @@ func (ll *LinkedList) UnlockAndEmpty(consumerID []byte, id []byte) error {
 func (ll *LinkedList) unlockAndEmpty(consumerID []byte, id []byte) error {
 	if bytes.Equal(ll.Head.ID, id) && bytes.Equal(ll.Head.ConsumerID, consumerID) {
 		if ll.Tail == ll.Head {
-			ll.Head.Reset()
 			ll.objPool.ReleaseObject(ll.Head)
 			ll.Head = nil
 			ll.Tail = nil
-
 			ll.Amount.Decrement()
 			return nil
 		}
@@ -228,7 +206,6 @@ func (ll *LinkedList) unlockAndEmpty(consumerID []byte, id []byte) error {
 		old := ll.Head
 		ll.Head = ll.Head.Next
 
-		old.Reset()
 		ll.objPool.ReleaseObject(old)
 
 		ll.Amount.Decrement()
@@ -241,22 +218,13 @@ func (ll *LinkedList) unlockAndEmpty(consumerID []byte, id []byte) error {
 	for current != nil {
 		if bytes.Equal(current.ID, id) && bytes.Equal(current.ConsumerID, consumerID) {
 			if current == ll.Tail {
-				old := current
-				old.Reset()
-				ll.objPool.ReleaseObject(old)
-
 				ll.Tail = prev
 				prev.Next = nil
-				ll.Amount.Decrement()
-				return nil
+			} else {
+				prev.Next = current.Next
 			}
 
-			prev.Next = current.Next
-
-			old := current
-			old.Reset()
-			ll.objPool.ReleaseObject(old)
-
+			ll.objPool.ReleaseObject(current)
 			ll.Amount.Decrement()
 			return nil
 		}
@@ -313,11 +281,11 @@ func (ll *LinkedList) UnlockAndEmptyBatch(consumerID []byte, ids [][]byte) error
 			if prev == nil {
 				ll.Head = ll.Head.Next
 				current = ll.Head
-				continue
+			} else {
+				prev.Next = current.Next
+				current = current.Next
 			}
 
-			prev.Next = current.Next
-			current = current.Next
 			continue
 		}
 
@@ -399,34 +367,32 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 		nodePair.current.ConsumerID = NO_CONSUMER
 		nodePair.current.fetched++
 
-		if nodePair.current.fetched < ll.fetchLimit {
-			continue
+		if nodePair.current.fetched >= ll.fetchLimit {
+			ll.handleThresholdExpire(nodePair.prev, nodePair.current)
+			ll.objPool.ReleaseObject(nodePair.current)
+			ll.Amount.Decrement()
 		}
-
-		if ll.deadLetter != nil {
-			(*ll.deadLetter).Enqueue(nodePair.current.ID, nodePair.current.Val)
-		}
-
-		if nodePair.current == ll.Tail && nodePair.current == ll.Head {
-			ll.Head = nil
-			ll.Tail = nil
-		} else if nodePair.current == ll.Tail {
-			ll.Tail = nodePair.prev
-			ll.Tail.Next = nil
-		} else if nodePair.current == ll.Head {
-			ll.Head = nodePair.current.Next
-		} else {
-			nodePair.prev.Next = nodePair.current.Next
-		}
-
-		old := nodePair.current
-		old.Reset()
-		ll.objPool.ReleaseObject(old)
-
-		ll.Amount.Decrement()
 	}
 
 	return nil
+}
+
+func (ll *LinkedList) handleThresholdExpire(prev, current *ListNode) {
+	if ll.deadLetter != nil {
+		(*ll.deadLetter).Enqueue(current.ID, current.Val)
+	}
+
+	if current == ll.Tail && current == ll.Head {
+		ll.Head = nil
+		ll.Tail = nil
+	} else if current == ll.Tail {
+		ll.Tail = prev
+		ll.Tail.Next = nil
+	} else if current == ll.Head {
+		ll.Head = current.Next
+	} else {
+		prev.Next = current.Next
+	}
 }
 
 // GetNextNodesValWithConsumerID returns the next X number of nodes' val property that have the
