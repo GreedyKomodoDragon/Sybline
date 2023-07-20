@@ -50,6 +50,8 @@ type QueueInfo struct {
 	RoutingKey string
 	Name       string
 	Size       uint32
+	RetryLimit uint32
+	HasDLQueue bool
 }
 
 type RequestMessageData struct {

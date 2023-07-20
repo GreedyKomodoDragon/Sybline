@@ -13,7 +13,7 @@ var ErrFailedEmpty = errors.New("unable to remove")
 var ErrInvalidQueueSize = errors.New("unable to create queue with size of 0")
 
 type QueueManager interface {
-	CreateQueue(name string, size uint32) error
+	CreateQueue(name string, size, retryLimit uint32, hasDLQ bool) error
 	AddMessage(name string, data []byte, id []byte) error
 	BatchAddMessage(name string, data [][]byte, ids [][]byte) error
 	GetMessage(name string, amount uint32, consumerID []byte, time int64) ([]Message, error)
@@ -46,7 +46,7 @@ func NewQueueManager(nodeTTL int64) QueueManager {
 	}
 }
 
-func (q queueManager) CreateQueue(name string, size uint32) error {
+func (q queueManager) CreateQueue(name string, size, retryLimit uint32, hasDLQ bool) error {
 	if q.queues == nil {
 		return fmt.Errorf("queue map not initialised")
 	}
@@ -67,9 +67,13 @@ func (q queueManager) CreateQueue(name string, size uint32) error {
 		return ErrQueueAlreadyExists
 	}
 
-	dlq := NewQueue(size, 3, q.nodeTTL, nil)
-	q.queues[name+"-dlq"] = dlq
-	q.queues[name] = NewQueue(size, 3, q.nodeTTL, &dlq)
+	var dlq Queue = nil
+	if hasDLQ {
+		dlq = NewQueue(size, retryLimit, q.nodeTTL, nil)
+		q.queues[name+"-dlq"] = dlq
+	}
+
+	q.queues[name] = NewQueue(size, retryLimit, q.nodeTTL, &dlq)
 
 	return nil
 }

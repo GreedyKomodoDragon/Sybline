@@ -163,6 +163,8 @@ func (s mQEndpointsServer) CreateQueue(ctx context.Context, request *messages.Qu
 		RoutingKey: request.RoutingKey,
 		Name:       request.Name,
 		Size:       request.Size,
+		RetryLimit: request.RetryLimit,
+		HasDLQueue: request.HasDLQueue,
 	})
 
 	return &messages.Status{

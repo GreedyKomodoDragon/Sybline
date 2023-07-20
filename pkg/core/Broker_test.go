@@ -20,10 +20,10 @@ func TestBroker_CreateQueue_Sync(t *testing.T) {
 
 	routingKey := "route"
 
-	err := b.CreateQueue("one", routingKey, 5)
+	err := b.CreateQueue("one", routingKey, 5, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
-	err = b.CreateQueue("two", routingKey, 5)
+	err = b.CreateQueue("two", routingKey, 5, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to existing routing key")
 }
 
@@ -33,13 +33,13 @@ func TestBroker_Can_Send_Via_Message_Routing(t *testing.T) {
 
 	routingKey := "route"
 
-	err := b.CreateQueue("one", routingKey, 1)
+	err := b.CreateQueue("one", routingKey, 1, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
-	err = b.CreateQueue("two", routingKey, 1)
+	err = b.CreateQueue("two", routingKey, 1, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to existing routing key")
 
-	err = b.CreateQueue("three", "random", 1)
+	err = b.CreateQueue("three", "random", 1, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to another new routing key")
 
 	isFull, err := q.IsFull("one")
@@ -77,7 +77,7 @@ func TestBroker_Delete_Queue(t *testing.T) {
 
 	routingKey := "route"
 
-	err := b.CreateQueue("one", routingKey, 1)
+	err := b.CreateQueue("one", routingKey, 1, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
 	one := uuid.New()
@@ -99,7 +99,7 @@ func TestBroker_Add_Route_Key(t *testing.T) {
 	routingKey := "route"
 	routingKeyTwo := "routeTwo"
 
-	err := b.CreateQueue("one", routingKey, 1)
+	err := b.CreateQueue("one", routingKey, 1, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
 	err = b.AddRouteKey(routingKeyTwo, "one")
@@ -124,7 +124,7 @@ func TestBroker_Delete_Routing_Keys(t *testing.T) {
 	routingKey := "route"
 	routingKeyTwo := "routeTwo"
 
-	err := b.CreateQueue("one", routingKey, 1)
+	err := b.CreateQueue("one", routingKey, 1, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
 	err = b.AddRouteKey(routingKeyTwo, "one")
@@ -143,13 +143,13 @@ func TestBroker_Can_Batch_Messages(t *testing.T) {
 
 	routingKey := "route"
 
-	err := b.CreateQueue("one_batch", routingKey, 3)
+	err := b.CreateQueue("one_batch", routingKey, 3, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
-	err = b.CreateQueue("two_batch", routingKey, 3)
+	err = b.CreateQueue("two_batch", routingKey, 3, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to existing routing key")
 
-	err = b.CreateQueue("three_batch", "random", 3)
+	err = b.CreateQueue("three_batch", "random", 3, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to another new routing key")
 
 	isFull, err := q.IsFull("one_batch")
@@ -189,7 +189,7 @@ func TestBroker_Can_Batch_Messages_Empty_Message(t *testing.T) {
 
 	routingKey := "route"
 
-	err := b.CreateQueue("one", routingKey, 3)
+	err := b.CreateQueue("one", routingKey, 3, 3, false)
 	assert.Nil(t, err, "should be able to connect new queue to new routing key")
 
 	isFull, err := q.IsFull("one")

@@ -16,7 +16,7 @@ var ErrQueueMustHaveOneRoutingKey = errors.New("each queue must have at least on
 var ErrEmptyData = errors.New("cannot add message that is empty")
 
 type Broker interface {
-	CreateQueue(name, routingKey string, size uint32) error
+	CreateQueue(name, routingKey string, size, retryLimit uint32, hasDLQ bool) error
 	DeleteQueue(name string) error
 	AddMessage(routingKey string, data []byte, id []byte) error
 	BatchAddMessage(routingKey string, data [][]byte, ids [][]byte) error
@@ -40,12 +40,12 @@ type broker struct {
 	logger       hclog.Logger
 }
 
-func (b broker) CreateQueue(name, routingKey string, size uint32) error {
+func (b broker) CreateQueue(name, routingKey string, size, retryLimit uint32, hasDLQ bool) error {
 	if len(routingKey) == 0 {
 		return ErrMissingRoutingKey
 	}
 
-	if err := b.queueManager.CreateQueue(name, size); err != nil {
+	if err := b.queueManager.CreateQueue(name, size, retryLimit, hasDLQ); err != nil {
 		b.logger.Error("failed to create queue", "queueName", name, "err", err)
 		return ErrFailedQueueCreation
 	}

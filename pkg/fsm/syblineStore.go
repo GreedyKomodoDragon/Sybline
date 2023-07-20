@@ -65,6 +65,7 @@ func NewStableStore(batchRate, logCache uint64) *SyblineStore {
 		currBatch: 0,
 		LogMux:    &sync.Mutex{},
 		mapLock:   &sync.RWMutex{},
+		logCache:  logCache,
 	}
 }
 
