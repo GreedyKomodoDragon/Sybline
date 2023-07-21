@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
+	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -588,12 +588,12 @@ func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *messages.BatchNac
 }
 
 func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}) (*fsm.ApplyResponse, error) {
-	jsonBytes, err := json.Marshal(payload)
+	jsonBytes, err := msgpack.Marshal(payload)
 	if err != nil {
 		return &fsm.ApplyResponse{}, err
 	}
 
-	data, err := json.Marshal(fsm.CommandPayload{
+	data, err := msgpack.Marshal(fsm.CommandPayload{
 		Op:   payloadType,
 		Data: jsonBytes,
 	})

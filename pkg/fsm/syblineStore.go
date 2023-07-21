@@ -3,7 +3,6 @@ package fsm
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/raft"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 const (
@@ -296,7 +296,7 @@ func (s *SyblineStore) persistLog(amount int) error {
 				return err
 			}
 
-			logData, err := json.Marshal(log)
+			logData, err := msgpack.Marshal(log)
 			if err != nil {
 				return err
 			}
@@ -375,7 +375,7 @@ func (s *SyblineStore) restoreLogs(rClose io.ReadCloser, name string) error {
 // Takes bytes and then applies log to fsm if a command log
 func (s *SyblineStore) extractStoreLog(by *[]byte) error {
 	payload := raft.Log{}
-	if err := json.Unmarshal(*by, &payload); err != nil {
+	if err := msgpack.Unmarshal(*by, &payload); err != nil {
 		return err
 	}
 
