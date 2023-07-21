@@ -35,6 +35,7 @@ type ListNode struct {
 	Next       *ListNode
 	ConsumerID []byte
 	time       int64
+	fetched    uint32
 }
 
 func (n *ListNode) Reset() {
@@ -43,21 +44,24 @@ func (n *ListNode) Reset() {
 	n.Next = nil
 	n.ConsumerID = nil
 	n.time = 0
+	n.fetched = 0
 }
 
 // LinkedList represents a singly linked list.
 type LinkedList struct {
-	Head    *ListNode
-	Tail    *ListNode
-	Amount  Counter
-	cap     uint32
-	mutex   *sync.Mutex
-	nodeTTL int64
-	objPool *NodeObjectPool
+	Head       *ListNode
+	Tail       *ListNode
+	Amount     Counter
+	cap        uint32
+	mutex      *sync.Mutex
+	nodeTTL    int64
+	objPool    *NodeObjectPool
+	deadLetter *Queue
+	fetchLimit uint32
 }
 
 // creates a queue
-func NewQueue(size uint32, nodeTTL int64) Queue {
+func NewQueue(size, fetchLimit uint32, nodeTTL int64, deadLetter *Queue) Queue {
 	objPool := NewNodeObjectPool(int(size))
 
 	return &LinkedList{
@@ -66,9 +70,11 @@ func NewQueue(size uint32, nodeTTL int64) Queue {
 			count: 0,
 			lock:  &sync.Mutex{},
 		},
-		mutex:   &sync.Mutex{},
-		nodeTTL: nodeTTL,
-		objPool: objPool,
+		mutex:      &sync.Mutex{},
+		nodeTTL:    nodeTTL,
+		objPool:    objPool,
+		deadLetter: deadLetter,
+		fetchLimit: fetchLimit,
 	}
 }
 
@@ -149,16 +155,27 @@ func (ll *LinkedList) Unlock(consumerID []byte, id []byte) bool {
 	ll.mutex.Lock()
 	defer ll.mutex.Unlock()
 
+	var prev *ListNode = nil
 	current := ll.Head
 	for current != nil {
 		if bytes.Equal(current.ID, id) {
 			if bytes.Equal(current.ConsumerID, consumerID) {
 				current.ConsumerID = NO_CONSUMER
+				current.fetched++
+
+				if current.fetched >= ll.fetchLimit {
+					ll.handleThresholdExpire(prev, current)
+					ll.objPool.ReleaseObject(current)
+					ll.Amount.Decrement()
+				}
+
 				return true
 			}
 
-			return false
+			break
 		}
+
+		prev = current
 		current = current.Next
 	}
 
@@ -179,11 +196,9 @@ func (ll *LinkedList) UnlockAndEmpty(consumerID []byte, id []byte) error {
 func (ll *LinkedList) unlockAndEmpty(consumerID []byte, id []byte) error {
 	if bytes.Equal(ll.Head.ID, id) && bytes.Equal(ll.Head.ConsumerID, consumerID) {
 		if ll.Tail == ll.Head {
-			ll.Head.Reset()
 			ll.objPool.ReleaseObject(ll.Head)
 			ll.Head = nil
 			ll.Tail = nil
-
 			ll.Amount.Decrement()
 			return nil
 		}
@@ -191,7 +206,6 @@ func (ll *LinkedList) unlockAndEmpty(consumerID []byte, id []byte) error {
 		old := ll.Head
 		ll.Head = ll.Head.Next
 
-		old.Reset()
 		ll.objPool.ReleaseObject(old)
 
 		ll.Amount.Decrement()
@@ -204,22 +218,13 @@ func (ll *LinkedList) unlockAndEmpty(consumerID []byte, id []byte) error {
 	for current != nil {
 		if bytes.Equal(current.ID, id) && bytes.Equal(current.ConsumerID, consumerID) {
 			if current == ll.Tail {
-				old := current
-				old.Reset()
-				ll.objPool.ReleaseObject(old)
-
 				ll.Tail = prev
 				prev.Next = nil
-				ll.Amount.Decrement()
-				return nil
+			} else {
+				prev.Next = current.Next
 			}
 
-			prev.Next = current.Next
-
-			old := current
-			old.Reset()
-			ll.objPool.ReleaseObject(old)
-
+			ll.objPool.ReleaseObject(current)
 			ll.Amount.Decrement()
 			return nil
 		}
@@ -276,11 +281,11 @@ func (ll *LinkedList) UnlockAndEmptyBatch(consumerID []byte, ids [][]byte) error
 			if prev == nil {
 				ll.Head = ll.Head.Next
 				current = ll.Head
-				continue
+			} else {
+				prev.Next = current.Next
+				current = current.Next
 			}
 
-			prev.Next = current.Next
-			current = current.Next
 			continue
 		}
 
@@ -316,6 +321,11 @@ func (ll *LinkedList) UnlockAndEmptyBatch(consumerID []byte, ids [][]byte) error
 	return nil
 }
 
+type pairNode struct {
+	prev    *ListNode
+	current *ListNode
+}
+
 func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 	ll.mutex.Lock()
 	defer ll.mutex.Unlock()
@@ -328,16 +338,22 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 		return fmt.Errorf("could not all ids to ack, queue less than length of ids")
 	}
 
-	nodes := []*ListNode{}
+	nodes := []pairNode{}
 	if bytes.Equal(ll.Head.ConsumerID, consumerID) && byteSliceExists(ids, ll.Head.ID) {
-		nodes = append(nodes, ll.Head)
+		nodes = append(nodes, pairNode{
+			prev:    nil,
+			current: ll.Head,
+		})
 	}
 
 	current := ll.Head.Next
-
+	prev := ll.Head
 	for current != nil && len(nodes) < len(ids) {
 		if bytes.Equal(current.ConsumerID, consumerID) && byteSliceExists(ids, current.ID) {
-			nodes = append(nodes, current)
+			nodes = append(nodes, pairNode{
+				prev:    prev,
+				current: current,
+			})
 		}
 
 		current = current.Next
@@ -347,11 +363,36 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 		return fmt.Errorf("could not all ids to nack")
 	}
 
-	for _, node := range nodes {
-		node.ConsumerID = NO_CONSUMER
+	for _, nodePair := range nodes {
+		nodePair.current.ConsumerID = NO_CONSUMER
+		nodePair.current.fetched++
+
+		if nodePair.current.fetched >= ll.fetchLimit {
+			ll.handleThresholdExpire(nodePair.prev, nodePair.current)
+			ll.objPool.ReleaseObject(nodePair.current)
+			ll.Amount.Decrement()
+		}
 	}
 
 	return nil
+}
+
+func (ll *LinkedList) handleThresholdExpire(prev, current *ListNode) {
+	if ll.deadLetter != nil {
+		(*ll.deadLetter).Enqueue(current.ID, current.Val)
+	}
+
+	if current == ll.Tail && current == ll.Head {
+		ll.Head = nil
+		ll.Tail = nil
+	} else if current == ll.Tail {
+		ll.Tail = prev
+		ll.Tail.Next = nil
+	} else if current == ll.Head {
+		ll.Head = current.Next
+	} else {
+		prev.Next = current.Next
+	}
 }
 
 // GetNextNodesValWithConsumerID returns the next X number of nodes' val property that have the

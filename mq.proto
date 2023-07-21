@@ -51,6 +51,8 @@ message QueueInfo {
     string routingKey = 1;
     string name = 2;
     uint32 size = 3;
+    uint32 retryLimit = 4;
+    bool hasDLQueue = 5;
 }
 
 message AckUpdate {

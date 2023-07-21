@@ -59,7 +59,8 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 				}
 			}
 
-			err := b.broker.CreateQueue(payCasted.Name, payCasted.RoutingKey, payCasted.Size)
+			err := b.broker.CreateQueue(payCasted.Name, payCasted.RoutingKey, payCasted.Size,
+				payCasted.RetryLimit, payCasted.HasDLQueue)
 			return &ApplyResponse{
 				Error: err,
 				Data:  nil,

@@ -13,7 +13,7 @@ import (
 func TestEnqueue(t *testing.T) {
 	one := uuid.New()
 	size := uint32(3)
-	q := core.NewQueue(size, 2*60)
+	q := core.NewQueue(size, 3, 2*60, nil)
 
 	// Test Enqueue for an empty queue.
 	q.Enqueue(one[:], []byte("value 1"))
@@ -36,7 +36,7 @@ func TestDequeue(t *testing.T) {
 	// create a new linked list
 
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	// add nodes to the linked list
 	one := uuid.New()
@@ -69,7 +69,7 @@ func TestDequeue(t *testing.T) {
 func TestBatchEnqueue(t *testing.T) {
 	// create a new linked list
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	zero := uuid.New()
 	ll.Enqueue(zero[:], []byte("node9"))
@@ -134,7 +134,7 @@ func TestBatchEnqueue(t *testing.T) {
 
 func TestBatchEnqueue_Unlock(t *testing.T) {
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	one := uuid.New()
 	two := uuid.New()
@@ -205,7 +205,7 @@ func TestBatchEnqueue_Unlock(t *testing.T) {
 
 func TestBatchEnqueue_UnlockEmptyBatch(t *testing.T) {
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	one := []byte("one")
 	two := []byte("two")
@@ -282,7 +282,7 @@ func TestBatchEnqueue_UnlockEmptyBatch(t *testing.T) {
 
 func TestBatchEnqueue_UnlockEmptyBatch_Empty_Add(t *testing.T) {
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	one := []byte("one")
 	two := []byte("two")
@@ -324,7 +324,7 @@ func TestBatchEnqueue_UnlockEmptyBatch_Empty_Add(t *testing.T) {
 
 func TestBatchEnqueue_UnlockBatch(t *testing.T) {
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	one := []byte("one")
 	two := []byte("two")
@@ -365,7 +365,7 @@ func TestBatchEnqueue_UnlockBatch(t *testing.T) {
 
 func TestBatchEnqueue_Unlock_Batch(t *testing.T) {
 	size := uint32(10)
-	ll := core.NewQueue(size, 2*60).(*core.LinkedList)
+	ll := core.NewQueue(size, 3, 2*60, nil).(*core.LinkedList)
 
 	one := []byte("one")
 	two := []byte("two")
@@ -402,4 +402,110 @@ func TestBatchEnqueue_Unlock_Batch(t *testing.T) {
 
 	_, ids = ll.Dequeue(2, consumerIDTwo, time.Now().Unix())
 	require.Equal(t, [][]byte{one, two}, ids, "expected ids to be [%v, %v], got %v", one, two, ids)
+}
+func TestBatchEnqueue_Unlock_Batch_DLQ(t *testing.T) {
+	size := uint32(10)
+	dlq := core.NewQueue(size, 3, 2*60, nil)
+
+	ll := core.NewQueue(size, 3, 2*60, &dlq).(*core.LinkedList)
+
+	one := []byte("one")
+	two := []byte("two")
+	three := []byte("three")
+	four := []byte("four")
+
+	ll.BatchEnqueue([]core.MessageBatch{
+		{
+			Id:   one[:],
+			Data: []byte("node1"),
+		},
+		{
+			Id:   two[:],
+			Data: []byte("node2"),
+		},
+		{
+			Id:   three[:],
+			Data: []byte("node3"),
+		},
+		{
+			Id:   four[:],
+			Data: []byte("node4"),
+		},
+	})
+
+	consumerID := []byte("a")
+
+	// dequeue nodes from the linked list
+	for i := 0; i < 3; i++ {
+		_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+		require.Equal(t, [][]byte{one, two}, ids, "expected ids to be [%v, %v], got %v", one, two, ids)
+		require.Nil(t, ll.BatchUnlock(consumerID, [][]byte{one, two}), "should be nil")
+	}
+
+	_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+	require.Equal(t, [][]byte{three, four}, ids, "expected ids to be [%v, %v], got %v", three, four, ids)
+
+	for i := 0; i < 3; i++ {
+		_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+		require.Equal(t, [][]byte{three, four}, ids, "expected ids to be [%v, %v], got %v", one, two, ids)
+		require.Nil(t, ll.BatchUnlock(consumerID, [][]byte{four, three}), "should be nil")
+	}
+
+	_, ids = ll.Dequeue(2, consumerID, time.Now().Unix())
+	require.Equal(t, [][]byte{}, ids, "should be empty")
+}
+
+func TestBatchEnqueue_Unlock_DLQ(t *testing.T) {
+	size := uint32(10)
+	dlq := core.NewQueue(size, 3, 2*60, nil)
+
+	ll := core.NewQueue(size, 3, 2*60, &dlq).(*core.LinkedList)
+
+	one := []byte("one")
+	two := []byte("two")
+	three := []byte("three")
+	four := []byte("four")
+
+	ll.BatchEnqueue([]core.MessageBatch{
+		{
+			Id:   one[:],
+			Data: []byte("node1"),
+		},
+		{
+			Id:   two[:],
+			Data: []byte("node2"),
+		},
+		{
+			Id:   three[:],
+			Data: []byte("node3"),
+		},
+		{
+			Id:   four[:],
+			Data: []byte("node4"),
+		},
+	})
+
+	consumerID := []byte("a")
+
+	// dequeue nodes from the linked list
+	for i := 0; i < 3; i++ {
+		_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+		require.Equal(t, [][]byte{one, two}, ids, "expected ids to be [%v, %v], got %v", one, two, ids)
+		require.True(t, ll.Unlock(consumerID, one), "should be nil")
+	}
+
+	for i := 0; i < 3; i++ {
+		_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+		require.Equal(t, [][]byte{two, three}, ids, "expected ids to be [%v, %v], got %v", two, three, ids)
+		require.True(t, ll.Unlock(consumerID, three), "should be nil")
+	}
+
+	for i := 0; i < 3; i++ {
+		_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+		require.Equal(t, [][]byte{two, four}, ids, "expected ids to be [%v, %v], got %v", two, four, ids)
+		require.True(t, ll.Unlock(consumerID, four), "should be nil")
+	}
+
+	_, ids := ll.Dequeue(2, consumerID, time.Now().Unix())
+	require.Equal(t, [][]byte{two}, ids, "expected ids to be [%v], got %v", two, ids)
 }

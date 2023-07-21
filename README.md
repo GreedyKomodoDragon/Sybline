@@ -1,6 +1,6 @@
-# Sybline
+<img src="./images/logo_full.svg" width="450"/>
 
-This messaging broker, called Sybline, is written in Go and provides reliable way to handle message queues. It uses gRPC to communicate with other services and applications. 
+Sybline is a message broker providing a reliable way to handle message queues. It uses gRPC to communicate with other services and applications. 
 
 The Sybline broker aims to provide features such as message persistence, routing, and delivery guarantees. Designed to be lightweight and easy to deploy. Sybline uses Raft Consensus to ensure High Availability(HA).
 
@@ -30,44 +30,3 @@ protoc --go_out=. --go_opt=paths=source_relative \
 ## Sybline Client Languages Offically supported 
 Languages and links to offical repos:
 - [Go]()
-
-
-## Feature Road Map
-
-Below is a running list of features implemented along with release targets. Avoids having to set up task tracking for this project since it is currently a side project.
-### Features left on Road Map for v0.1.0
-There is no timeline for this road map.
-- [ ] TLS confirmed working
-    - [ ] Redis Session
-- [ ] Add Validation to each endpoint
-
-### Feature Road Map v0.2.0
-- [ ] Enable incremental Snapshots to disk
-- [ ] Redis Cluster Support
-
-### Known Bugs
-- Snapshot randomly cannot find log
-
-### Unconfirmed Features/Idea list
-- [ ] User can whitelist a queue's access
-- [ ] Change users to have access levels e.g. seperate infra, publisher & consumer
-- [ ] Can read from yaml config to start server (leader uses this)
-    - May require some work
-- [ ] Some way to peform log compression, remove logs that no longer needed
-    - May not be an issue with log compression after incremental snapshots are implemented
-- [ ] Manual node managment via clients 
-    - [ ] Can add nodes
-    - [ ] Can delete nodes
-
-## Testing Required
-Not currently close to any release, but this section will be filled with more in-depth testing then.
-- [ ] Nodes can fail and comeback online in more realistic environment
-
-## Tech Debt
-- [ ] Change Auth to take token not MetaData value
-- [ ] Use object pools for queue nodes
-- [ ] Improve memory management/configurations
-    - Many structs/objects are thrown away but could be re-used e.g. in object pools
-
-
-

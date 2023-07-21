@@ -37,7 +37,7 @@ func TestQueueManager_Add_Message_To_Existant_Queue(t *testing.T) {
 	q := core.NewQueueManager(2 * 60)
 	name := "queue_name"
 
-	err := q.CreateQueue(name, 5)
+	err := q.CreateQueue(name, 5, 3, false)
 	assert.Nil(t, err, "should be able to create a queue")
 
 	one := uuid.New()
@@ -49,10 +49,10 @@ func TestQueueManager_Create_Duplicate_Queue_Sync(t *testing.T) {
 	q := core.NewQueueManager(2 * 60)
 	name := "queue_name"
 
-	err := q.CreateQueue(name, 5)
+	err := q.CreateQueue(name, 5, 3, false)
 	assert.Nil(t, err, "should be able to create a queue")
 
-	err = q.CreateQueue(name, 5)
+	err = q.CreateQueue(name, 5, 3, false)
 	errMsg := core.ErrQueueAlreadyExists.Error()
 	assert.EqualErrorf(t, err, errMsg, "should not be able to create the queue again")
 }
@@ -68,7 +68,7 @@ func TestQueueManager_Create_Duplicate_Queue_Async(t *testing.T) {
 		r := rand.Intn(50)
 		time.Sleep(time.Duration(r) * time.Microsecond)
 
-		if err := q.CreateQueue(name, size); err != nil {
+		if err := q.CreateQueue(name, size, 3, false); err != nil {
 			n.Add(1)
 		}
 		wg.Done()
@@ -92,7 +92,7 @@ func TestQueueManager_GetMessages(t *testing.T) {
 	q := core.NewQueueManager(2 * 60)
 	name := "queue_name"
 
-	err := q.CreateQueue(name, 5)
+	err := q.CreateQueue(name, 5, 3, false)
 	assert.Nil(t, err, "should be able to create a queue")
 
 	one := uuid.New()
@@ -131,7 +131,7 @@ func TestQueueManager_Ack(t *testing.T) {
 	expectedErrorMsg := core.ErrQueueMissing.Error()
 	assert.EqualErrorf(t, err, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, err)
 
-	err = q.CreateQueue(name, 5)
+	err = q.CreateQueue(name, 5, 3, false)
 	assert.Nil(t, err, "should be able to create a queue")
 
 	one := uuid.New()
@@ -173,7 +173,7 @@ func TestQueueManager_Nack_Existing_Message(t *testing.T) {
 	expectedErrorMsg := core.ErrQueueMissing.Error()
 	assert.EqualErrorf(t, err, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, err)
 
-	err = q.CreateQueue(name, 5)
+	err = q.CreateQueue(name, 5, 3, false)
 	assert.Nil(t, err, "should be able to create a queue")
 
 	q.AddMessage(name, []byte("random"), one[:])
@@ -202,7 +202,7 @@ func TestQueueManager_Delete_Queue(t *testing.T) {
 	expectedErrorMsg := core.ErrQueueMissing.Error()
 	assert.EqualErrorf(t, err, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, err)
 
-	err = q.CreateQueue(name, 5)
+	err = q.CreateQueue(name, 5, 3, false)
 	assert.Nil(t, err, "should be able to create a queue")
 
 	q.AddMessage(name, []byte("random"), one[:])

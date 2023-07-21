@@ -65,6 +65,7 @@ func NewStableStore(batchRate, logCache uint64) *SyblineStore {
 		currBatch: 0,
 		LogMux:    &sync.Mutex{},
 		mapLock:   &sync.RWMutex{},
+		logCache:  logCache,
 	}
 }
 
@@ -307,7 +308,7 @@ func (s *SyblineStore) persistLog(amount int) error {
 		}
 
 		// delete logs after
-		s.deleteRange(lower, upper)
+		s.deleteRange(0, upper)
 	}
 
 	return nil

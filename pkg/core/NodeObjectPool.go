@@ -43,6 +43,8 @@ func (op *NodeObjectPool) GetObject() *ListNode {
 }
 
 func (op *NodeObjectPool) ReleaseObject(obj *ListNode) {
+	obj.Reset()
+
 	op.mutex.Lock()
 	defer op.mutex.Unlock()
 
