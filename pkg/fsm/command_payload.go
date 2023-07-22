@@ -1,11 +1,11 @@
 package fsm
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var (
@@ -19,12 +19,12 @@ type CommandPayload struct {
 }
 
 func SendRaftCommand(raftServer *raft.Raft, payloadType Operation, payload interface{}) (*ApplyResponse, error) {
-	jsonBytes, err := json.Marshal(payload)
+	jsonBytes, err := msgpack.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := json.Marshal(CommandPayload{
+	data, err := msgpack.Marshal(CommandPayload{
 		Op:   payloadType,
 		Data: jsonBytes,
 	})

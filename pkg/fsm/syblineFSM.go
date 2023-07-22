@@ -1,7 +1,6 @@
 package fsm
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"sybline/pkg/utils"
 
 	"github.com/hashicorp/raft"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var BREAK_SYMBOL = []byte("§")
@@ -41,7 +41,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 	switch log.Type {
 	case raft.LogCommand:
 		payload := CommandPayload{}
-		if err := json.Unmarshal(log.Data, &payload); err != nil {
+		if err := msgpack.Unmarshal(log.Data, &payload); err != nil {
 			fmt.Fprintf(os.Stderr, "error marshalling store payload %s\n", err.Error())
 			return &ApplyResponse{
 				Error: err,
@@ -52,7 +52,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 		switch payload.Op {
 		case CREATE_QUEUE:
 			var payCasted structs.QueueInfo
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -68,7 +68,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case SUBMIT_MESSAGE:
 			var payCasted structs.MessageInfo
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -83,7 +83,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case SUBMIT_BATCH_MESSAGE:
 			var payCasted structs.BatchMessages
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -104,7 +104,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case ADD_ROUTING_KEY:
 			var payCasted structs.AddRoute
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -119,7 +119,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case DELETE_ROUTING_KEY:
 			var payCasted structs.DeleteRoute
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -134,7 +134,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case GET_MESSAGES:
 			var payCasted structs.RequestMessageData
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -156,7 +156,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case ACK:
 			var payCasted structs.AckUpdate
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -171,7 +171,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case NACK:
 			var payCasted structs.AckUpdate
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -186,7 +186,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case DELETE_QUEUE:
 			var payCasted structs.DeleteQueueInfo
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -201,7 +201,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case CREATE_ACCOUNT:
 			var payCasted structs.UserCreds
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -216,7 +216,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case CHANGE_PASSWORD:
 			var payCasted structs.ChangeCredentials
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -231,7 +231,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case REMOVE_LOCKS:
 			var payCasted structs.RemoveLocks
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -246,7 +246,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case DELETE_USER:
 			var payCasted structs.UserInformation
-			if err := json.Unmarshal(payload.Data, &payCasted); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -261,7 +261,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case BATCH_ACK:
 			var data structs.BatchAckUpdate
-			if err := json.Unmarshal(payload.Data, &data); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -276,7 +276,7 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 
 		case BATCH_NACK:
 			var data structs.BatchNackUpdate
-			if err := json.Unmarshal(payload.Data, &data); err != nil {
+			if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
 				return &ApplyResponse{
 					Error: err,
 					Data:  nil,
@@ -323,7 +323,7 @@ func (b syblineFSM) getSnapshotData() ([]byte, error) {
 			return nil, err
 		}
 
-		logData, err := json.Marshal(log)
+		logData, err := msgpack.Marshal(log)
 		if err != nil {
 			return nil, err
 		}
@@ -380,7 +380,7 @@ func (b syblineFSM) Restore(rClose io.ReadCloser) error {
 // Takes bytes and then applies log to fsm if a command log
 func (b syblineFSM) extractApplyLog(by *[]byte) error {
 	payload := raft.Log{}
-	if err := json.Unmarshal(*by, &payload); err != nil {
+	if err := msgpack.Unmarshal(*by, &payload); err != nil {
 		return err
 	}
 
