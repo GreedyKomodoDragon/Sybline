@@ -47,11 +47,11 @@ type MessageInfo struct {
 }
 
 type QueueInfo struct {
-	RoutingKey string `protobuf:"bytes,1,opt,name=routingKey,proto3" json:"routingKey,omitempty"`
-	Name       string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Size       uint32 `protobuf:"varint,3,opt,name=size,proto3" json:"size,omitempty"`
-	RetryLimit uint32 `protobuf:"varint,4,opt,name=retryLimit,proto3" json:"retryLimit,omitempty"`
-	HasDLQueue bool   `protobuf:"varint,5,opt,name=hasDLQueue,proto3" json:"hasDLQueue,omitempty"`
+	RoutingKey string
+	Name       string
+	Size       uint32
+	RetryLimit uint32
+	HasDLQueue bool
 }
 
 type RequestMessageData struct {
