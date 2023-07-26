@@ -1,8 +1,9 @@
 package utils
 
-// indexes a sub-pattern inside a larger slice, if exists
-//
-// TODO: Refactor process so this is not needed
+type ResetStruct interface {
+	Reset()
+}
+
 func FindIndexes(largerSlice, smallerSlice []byte) []int {
 	indexes := make([]int, 0)
 

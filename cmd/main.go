@@ -102,7 +102,6 @@ func main() {
 	}
 
 	volDir := v.GetString(raftVolDir)
-
 	if volDir == "" {
 		log.Fatalf("RAFT_VOL_DIR is required")
 	}

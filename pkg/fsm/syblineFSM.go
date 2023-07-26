@@ -16,20 +16,24 @@ import (
 var BREAK_SYMBOL = []byte("§")
 
 type syblineFSM struct {
-	broker       core.Broker
-	consumer     core.ConsumerManager
-	queueManager core.QueueManager
-	auth         auth.AuthManager
-	store        *SyblineStore
+	broker         core.Broker
+	consumer       core.ConsumerManager
+	queueManager   core.QueueManager
+	auth           auth.AuthManager
+	store          *SyblineStore
+	commandPayload *CommandPayload
+	batchMessage   *structs.BatchMessages
 }
 
 func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.AuthManager, queueManager core.QueueManager, store *SyblineStore) (syblineFSM, error) {
 	return syblineFSM{
-		broker:       broker,
-		consumer:     consumer,
-		auth:         auth,
-		queueManager: queueManager,
-		store:        store,
+		broker:         broker,
+		consumer:       consumer,
+		auth:           auth,
+		queueManager:   queueManager,
+		store:          store,
+		commandPayload: &CommandPayload{},
+		batchMessage:   &structs.BatchMessages{},
 	}, nil
 }
 
@@ -40,7 +44,10 @@ func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.
 func (b syblineFSM) Apply(log *raft.Log) interface{} {
 	switch log.Type {
 	case raft.LogCommand:
-		payload := CommandPayload{}
+		// re-use object
+		payload := b.commandPayload
+		defer payload.Reset()
+
 		if err := msgpack.Unmarshal(log.Data, &payload); err != nil {
 			fmt.Fprintf(os.Stderr, "error marshalling store payload %s\n", err.Error())
 			return &ApplyResponse{
@@ -82,7 +89,9 @@ func (b syblineFSM) Apply(log *raft.Log) interface{} {
 			}
 
 		case SUBMIT_BATCH_MESSAGE:
-			var payCasted structs.BatchMessages
+			payCasted := b.batchMessage
+			defer payCasted.Reset()
+
 			if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 				return &ApplyResponse{
 					Error: err,

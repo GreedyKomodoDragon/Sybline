@@ -32,13 +32,7 @@ func (op *NodeObjectPool) GetObject() *ListNode {
 			return nil
 		}
 
-		if len(op.pool) >= op.maxSize {
-			// create but we won't accept it back
-			return &ListNode{}
-		}
-
-		obj := &ListNode{}
-		return obj
+		return &ListNode{}
 	}
 }
 

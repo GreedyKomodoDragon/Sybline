@@ -1,0 +1,22 @@
+version: '3.1'
+
+services:
+  session:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - ./cache:/data
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.3
+
+networks:
+  webnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
