@@ -18,6 +18,11 @@ type CommandPayload struct {
 	Data []byte    `json:"d"`
 }
 
+func (c *CommandPayload) Reset() {
+	c.Op = 0
+	c.Data = []byte{}
+}
+
 func SendRaftCommand(raftServer *raft.Raft, payloadType Operation, payload interface{}) (*ApplyResponse, error) {
 	jsonBytes, err := msgpack.Marshal(payload)
 	if err != nil {

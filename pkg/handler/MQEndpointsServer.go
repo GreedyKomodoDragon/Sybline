@@ -46,17 +46,19 @@ type MQEndpointsServer interface {
 	mustEmbedUnimplementedMQEndpointsServer()
 }
 type mQEndpointsServer struct {
-	authManager auth.AuthManager
-	raftServer  *raft.Raft
-	salt        string
+	authManager   auth.AuthManager
+	raftServer    *raft.Raft
+	salt          string
+	getObjectPool *GetObjectPool
 	unimplementedMQEndpointsServer
 }
 
 func NewServer(authManager auth.AuthManager, raftServer *raft.Raft, salt string) MQEndpointsServer {
 	return mQEndpointsServer{
-		authManager: authManager,
-		raftServer:  raftServer,
-		salt:        salt,
+		authManager:   authManager,
+		raftServer:    raftServer,
+		salt:          salt,
+		getObjectPool: NewGetObjectPool(10000),
 	}
 }
 
@@ -113,12 +115,15 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *messages.Re
 		return nil, ErrNoAuthToken
 	}
 
-	res, err := s.sendCommand(fsm.GET_MESSAGES, structs.RequestMessageData{
-		QueueName:  request.QueueName,
-		Amount:     request.Amount,
-		ConsumerID: consumerID,
-		Time:       time.Now().Unix(),
-	})
+	msg := s.getObjectPool.GetObject()
+	msg.QueueName = request.QueueName
+	msg.Amount = request.Amount
+	msg.ConsumerID = consumerID
+	msg.Time = time.Now().Unix()
+
+	res, err := s.sendCommand(fsm.GET_MESSAGES, msg)
+
+	s.getObjectPool.ReleaseObject(msg)
 
 	if err != nil {
 		return nil, err

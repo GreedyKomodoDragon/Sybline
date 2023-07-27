@@ -19,6 +19,11 @@ type SessionHandler interface {
 	DeleteTokenContaining(string) error
 }
 
+type timeSession struct {
+	time time.Time
+	id   []byte
+}
+
 func NewRedisSession(host string, database int, password string) (SessionHandler, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     host,
@@ -32,18 +37,34 @@ func NewRedisSession(host string, database int, password string) (SessionHandler
 
 	return &redisSession{
 		redisClient: redisClient,
+		batchSize:   50,
+		sessionIDs:  map[string]timeSession{},
 	}, nil
 }
 
 type redisSession struct {
 	redisClient *redis.Client
+	sessionIDs  map[string]timeSession
 	batchSize   int64
 }
 
 func (r *redisSession) GetConsumerID(token string, username string) ([]byte, error) {
 	ctx := context.Background()
 
-	cmd := r.redisClient.Get(ctx, token+"_"+username)
+	key := token + "_" + username
+
+	// use local session if possible
+	sess, ok := r.sessionIDs[key]
+	if ok {
+		if t := time.Now(); sess.time.Before(t) {
+			return sess.id, nil
+		}
+
+		delete(r.sessionIDs, key)
+		return nil, ErrNoUserSessionExists
+	}
+
+	cmd := r.redisClient.Get(ctx, key)
 	err := cmd.Err()
 	if err == redis.Nil {
 		return nil, ErrNoUserSessionExists
@@ -68,6 +89,13 @@ func (r *redisSession) RemoveToken(token string, username string) error {
 
 func (r *redisSession) AddToken(token string, username string, consumerID []byte, ttl time.Duration) error {
 	ctx := context.Background()
+
+	key := token + "_" + username
+
+	r.sessionIDs[key] = timeSession{
+		time: time.Now(),
+		id:   consumerID,
+	}
 
 	cmd := r.redisClient.Set(ctx, token+"_"+username, consumerID, ttl)
 	return cmd.Err()

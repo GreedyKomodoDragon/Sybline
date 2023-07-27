@@ -61,6 +61,13 @@ type RequestMessageData struct {
 	Time       int64
 }
 
+func (r *RequestMessageData) Reset() {
+	r.QueueName = ""
+	r.Amount = 0
+	r.ConsumerID = nil
+	r.Time = 0
+}
+
 type UserCreds struct {
 	Username string
 	Password string
@@ -78,6 +85,10 @@ type Messages struct {
 
 type BatchMessages struct {
 	Messages []Messages
+}
+
+func (b *BatchMessages) Reset() {
+	b.Messages = nil
 }
 
 type UserInformation struct {
