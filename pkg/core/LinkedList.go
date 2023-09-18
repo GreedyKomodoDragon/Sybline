@@ -339,7 +339,7 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 	}
 
 	nodes := []pairNode{}
-	if bytes.Equal(ll.Head.ConsumerID, consumerID) && byteSliceExists(ids, ll.Head.ID) {
+	if byteSliceExists(ids, ll.Head.ID) {
 		nodes = append(nodes, pairNode{
 			prev:    nil,
 			current: ll.Head,
@@ -349,7 +349,7 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 	current := ll.Head.Next
 	prev := ll.Head
 	for current != nil && len(nodes) < len(ids) {
-		if bytes.Equal(current.ConsumerID, consumerID) && byteSliceExists(ids, current.ID) {
+		if byteSliceExists(ids, current.ID) {
 			nodes = append(nodes, pairNode{
 				prev:    prev,
 				current: current,
@@ -360,7 +360,7 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 	}
 
 	if len(nodes) == 0 || len(nodes) != len(ids) {
-		return fmt.Errorf("could not all ids to nack")
+		return fmt.Errorf("could not all ids to nack", len(nodes) == 0, len(nodes) != len(ids))
 	}
 
 	for _, nodePair := range nodes {

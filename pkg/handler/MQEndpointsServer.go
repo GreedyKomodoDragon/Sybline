@@ -11,8 +11,8 @@ import (
 
 	"time"
 
+	raft "github.com/GreedyKomodoDragon/raft"
 	"github.com/google/uuid"
-	"github.com/hashicorp/raft"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -47,13 +47,13 @@ type MQEndpointsServer interface {
 }
 type mQEndpointsServer struct {
 	authManager   auth.AuthManager
-	raftServer    *raft.Raft
+	raftServer    raft.Raft
 	salt          string
 	getObjectPool *GetObjectPool
 	unimplementedMQEndpointsServer
 }
 
-func NewServer(authManager auth.AuthManager, raftServer *raft.Raft, salt string) MQEndpointsServer {
+func NewServer(authManager auth.AuthManager, raftServer raft.Raft, salt string) MQEndpointsServer {
 	return mQEndpointsServer{
 		authManager:   authManager,
 		raftServer:    raftServer,
@@ -63,7 +63,7 @@ func NewServer(authManager auth.AuthManager, raftServer *raft.Raft, salt string)
 }
 
 func (s mQEndpointsServer) SubmitMessage(ctx context.Context, info *messages.MessageInfo) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -97,7 +97,7 @@ func (s mQEndpointsServer) SubmitMessage(ctx context.Context, info *messages.Mes
 }
 
 func (s mQEndpointsServer) GetMessages(ctx context.Context, request *messages.RequestMessageData) (*messages.MessageCollection, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.MessageCollection{}, ErrNotLeader
 	}
 
@@ -124,12 +124,11 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *messages.Re
 	res, err := s.sendCommand(fsm.GET_MESSAGES, msg)
 
 	s.getObjectPool.ReleaseObject(msg)
-
 	if err != nil {
 		return nil, err
 	}
 
-	msgs, _ := res.Data.([]core.Message)
+	msgs, _ := res.([]core.Message)
 	msgConverted := make([]*messages.MessageData, len(msgs))
 
 	for index, msg := range msgs {
@@ -145,7 +144,7 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *messages.Re
 }
 
 func (s mQEndpointsServer) CreateQueue(ctx context.Context, request *messages.QueueInfo) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -178,7 +177,7 @@ func (s mQEndpointsServer) CreateQueue(ctx context.Context, request *messages.Qu
 }
 
 func (s mQEndpointsServer) Ack(ctx context.Context, request *messages.AckUpdate) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -243,7 +242,7 @@ func (s mQEndpointsServer) Login(ctx context.Context, request *messages.Credenti
 }
 
 func (s mQEndpointsServer) ChangePassword(ctx context.Context, request *messages.ChangeCredentials) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -274,7 +273,7 @@ func (s mQEndpointsServer) ChangePassword(ctx context.Context, request *messages
 }
 
 func (s mQEndpointsServer) Nack(ctx context.Context, request *messages.AckUpdate) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -310,7 +309,7 @@ func (s mQEndpointsServer) Nack(ctx context.Context, request *messages.AckUpdate
 }
 
 func (s mQEndpointsServer) DeleteQueue(ctx context.Context, request *messages.DeleteQueueInfo) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -339,7 +338,7 @@ func (s mQEndpointsServer) DeleteQueue(ctx context.Context, request *messages.De
 }
 
 func (s mQEndpointsServer) AddRoutingKey(ctx context.Context, in *messages.AddRoute) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -369,7 +368,7 @@ func (s mQEndpointsServer) AddRoutingKey(ctx context.Context, in *messages.AddRo
 }
 
 func (s mQEndpointsServer) DeleteRoutingKey(ctx context.Context, in *messages.DeleteRoute) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -399,7 +398,7 @@ func (s mQEndpointsServer) DeleteRoutingKey(ctx context.Context, in *messages.De
 }
 
 func (s mQEndpointsServer) CreateUser(ctx context.Context, in *messages.UserCreds) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -434,7 +433,7 @@ type prebatch struct {
 }
 
 func (s mQEndpointsServer) SubmitBatchedMessages(ctx context.Context, in *messages.BatchMessages) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -495,12 +494,12 @@ func (s mQEndpointsServer) IsLeaderNode(ctx context.Context, msg *messages.Leade
 	}
 
 	return &messages.Status{
-		Status: s.raftServer.State() == raft.Leader,
+		Status: s.raftServer.State() == raft.LEADER,
 	}, nil
 }
 
 func (s mQEndpointsServer) DeleteUser(ctx context.Context, msg *messages.UserInformation) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -529,7 +528,7 @@ func (s mQEndpointsServer) DeleteUser(ctx context.Context, msg *messages.UserInf
 }
 
 func (s mQEndpointsServer) BatchAck(ctx context.Context, msg *messages.BatchAckUpdate) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -561,7 +560,7 @@ func (s mQEndpointsServer) BatchAck(ctx context.Context, msg *messages.BatchAckU
 }
 
 func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *messages.BatchNackUpdate) (*messages.Status, error) {
-	if s.raftServer.State() != raft.Leader {
+	if s.raftServer.State() != raft.LEADER {
 		return &messages.Status{
 			Status: false,
 		}, ErrNotLeader
@@ -592,7 +591,7 @@ func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *messages.BatchNac
 	}, err
 }
 
-func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}) (*fsm.ApplyResponse, error) {
+func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}) (interface{}, error) {
 	jsonBytes, err := msgpack.Marshal(payload)
 	if err != nil {
 		return &fsm.ApplyResponse{}, err
@@ -607,17 +606,7 @@ func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interf
 		return &fsm.ApplyResponse{}, err
 	}
 
-	applyFuture := s.raftServer.Apply(data, 4000*time.Millisecond)
-	if err := applyFuture.Error(); err != nil {
-		return &fsm.ApplyResponse{}, err
-	}
-
-	res, ok := applyFuture.Response().(*fsm.ApplyResponse)
-	if !ok {
-		return &fsm.ApplyResponse{}, ErrResponseCastFailed
-	}
-
-	return res, res.Error
+	return s.raftServer.ApplyLog(data, raft.DATA_LOG)
 }
 
 // UnsafeMQEndpointsServer may be embedded to opt out of forward compatibility for this service.
