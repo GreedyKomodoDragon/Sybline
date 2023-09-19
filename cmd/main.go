@@ -16,7 +16,6 @@ import (
 	"time"
 
 	raft "github.com/GreedyKomodoDragon/raft"
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -151,14 +150,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	lgr := hclog.New(&hclog.LoggerOptions{
-		Name:  "sybline-logger",
-		Level: hclog.LevelFromString("debug"),
-	})
-
 	queueMan := core.NewQueueManager(nodeTTL)
-	broker := core.NewBroker(queueMan, lgr)
-	consumer := core.NewConsumerManager(queueMan, lgr)
+	broker := core.NewBroker(queueMan)
+	consumer := core.NewConsumerManager(queueMan)
 
 	tDur := time.Second * time.Duration(tokenDuration)
 	authManger := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur)
