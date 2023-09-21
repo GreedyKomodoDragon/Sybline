@@ -15,7 +15,7 @@ import (
 
 	"time"
 
-	raft "github.com/GreedyKomodoDragon/raft"
+	"github.com/GreedyKomodoDragon/raft"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -23,22 +23,16 @@ import (
 )
 
 const (
-	serverPort               string = "SERVER_PORT"
-	raftNodeId               string = "RAFT_NODE_ID"
-	raftPort                 string = "RAFT_PORT"
-	raftVolDir               string = "RAFT_VOL_DIR"
-	TLS_ENABLED              string = "TLS_ENABLED"
-	nodes                    string = "NODES"
-	addresses                string = "ADDRESSES"
-	BATCH_LIMIT              string = "BATCH_LIMIT"
-	SNAPSHOT_THRESHOLD       string = "SNAPSHOT_THRESHOLD"
-	SNAPSHOT_RETENTION_COUNT string = "SNAPSHOT_RETENTION_COUNT"
-	CACHE_LIMIT              string = "CACHE_LIMIT"
-	HOST_IP                  string = "HOST_IP"
+	serverPort         string = "SERVER_PORT"
+	raftNodeId         string = "RAFT_NODE_ID"
+	TLS_ENABLED        string = "TLS_ENABLED"
+	nodes              string = "NODES"
+	addresses          string = "ADDRESSES"
+	SNAPSHOT_THRESHOLD string = "SNAPSHOT_THRESHOLD"
+	HOST_IP            string = "HOST_IP"
 
-	ELECTION_TIMEOUT     string = "ELECTION_TIMEOUT"
-	HEARTBEAT_TIMEOUT    string = "HEARTBEAT_TIMEOUT"
-	LEADER_LEASE_TIMEOUT string = "HEARTBEAT_TIMEOUT"
+	ELECTION_TIMEOUT  string = "ELECTION_TIMEOUT"
+	HEARTBEAT_TIMEOUT string = "HEARTBEAT_TIMEOUT"
 
 	REDIS_IP       string = "REDIS_IP"
 	TOKEN_DURATION string = "TOKEN_DURATION"
@@ -46,25 +40,18 @@ const (
 	REDIS_PASSWORD string = "REDIS_PASSWORD"
 
 	NODE_TTL string = "NODE_TTL"
-
-	SALT string = "SALT"
+	SALT     string = "SALT"
 )
 
 var confKeys = []string{
 	serverPort,
 	raftNodeId,
-	raftPort,
-	raftVolDir,
 	nodes,
 	addresses,
-	BATCH_LIMIT,
 	SNAPSHOT_THRESHOLD,
-	SNAPSHOT_RETENTION_COUNT,
-	CACHE_LIMIT,
 	HOST_IP,
 	ELECTION_TIMEOUT,
 	HEARTBEAT_TIMEOUT,
-	LEADER_LEASE_TIMEOUT,
 	REDIS_IP,
 	TOKEN_DURATION,
 	REDIS_DATABASE,

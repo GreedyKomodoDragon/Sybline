@@ -7,7 +7,8 @@ import (
 	"sybline/pkg/core"
 	"sybline/pkg/structs"
 
-	raft "github.com/GreedyKomodoDragon/raft"
+	"github.com/GreedyKomodoDragon/raft"
+	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -34,9 +35,9 @@ func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.
 }
 
 // Apply log is invoked once a log entry is committed.
-func (b syblineFSM) Apply(log raft.Log) (interface{}, error) {
+func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 	// ignore if RAFT_LOG
-	if log.LogType == raft.RAFT_LOG {
+	if lg.LogType == raft.RAFT_LOG || lg.LogType == 0 {
 		return nil, nil
 	}
 
@@ -44,8 +45,8 @@ func (b syblineFSM) Apply(log raft.Log) (interface{}, error) {
 	payload := b.commandPayload
 	defer payload.Reset()
 
-	if err := msgpack.Unmarshal(log.Data, &payload); err != nil {
-		fmt.Fprintf(os.Stderr, "error marshalling store payload %s\n", err.Error())
+	if err := msgpack.Unmarshal(lg.Data, &payload); err != nil {
+		log.Error().Uint64("logType", lg.LogType).Bytes("data", lg.Data).Uint64("index", lg.Index).Err(err).Msg("issue marshalling store payload")
 		return nil, err
 	}
 
