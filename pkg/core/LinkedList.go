@@ -360,7 +360,7 @@ func (ll *LinkedList) BatchUnlock(consumerID []byte, ids [][]byte) error {
 	}
 
 	if len(nodes) == 0 || len(nodes) != len(ids) {
-		return fmt.Errorf("could not all ids to nack", len(nodes) == 0, len(nodes) != len(ids))
+		return fmt.Errorf("could not all ids to nack: %v %v", len(nodes) == 0, len(nodes) != len(ids))
 	}
 
 	for _, nodePair := range nodes {
