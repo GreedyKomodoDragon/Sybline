@@ -29,10 +29,13 @@ const (
 	nodes              string = "NODES"
 	addresses          string = "ADDRESSES"
 	SNAPSHOT_THRESHOLD string = "SNAPSHOT_THRESHOLD"
-	HOST_IP            string = "HOST_IP"
 
 	ELECTION_TIMEOUT  string = "ELECTION_TIMEOUT"
 	HEARTBEAT_TIMEOUT string = "HEARTBEAT_TIMEOUT"
+
+	STREAM_BUILD_TIMEOUT  string = "STREAM_BUILD_TIMEOUT"
+	STREAM_BUILD_ATTEMPTS string = "STREAM_BUILD_ATTEMPTS"
+	APPEND_TIMEOUT        string = "APPEND_TIMEOUT"
 
 	REDIS_IP       string = "REDIS_IP"
 	TOKEN_DURATION string = "TOKEN_DURATION"
@@ -49,7 +52,6 @@ var confKeys = []string{
 	nodes,
 	addresses,
 	SNAPSHOT_THRESHOLD,
-	HOST_IP,
 	ELECTION_TIMEOUT,
 	HEARTBEAT_TIMEOUT,
 	REDIS_IP,
@@ -67,11 +69,6 @@ func main() {
 	if err := v.BindEnv(confKeys...); err != nil {
 		log.Fatal(err)
 		return
-	}
-
-	hostIP := v.GetString(HOST_IP)
-	if hostIP == "" {
-		log.Fatalf("HOST_IP is required")
 	}
 
 	raftId := v.GetUint64(raftNodeId)
@@ -92,6 +89,21 @@ func main() {
 	tokenDuration := v.GetInt64(TOKEN_DURATION)
 	if tokenDuration == 0 {
 		tokenDuration = 1800
+	}
+
+	streamBuildTimeout := v.GetInt(STREAM_BUILD_TIMEOUT)
+	if streamBuildTimeout == 0 {
+		streamBuildTimeout = 2
+	}
+
+	streamBuildAttempts := v.GetInt(STREAM_BUILD_ATTEMPTS)
+	if streamBuildAttempts == 0 {
+		streamBuildAttempts = 3
+	}
+
+	appendTimeout := v.GetInt(APPEND_TIMEOUT)
+	if appendTimeout == 0 {
+		appendTimeout = 3
 	}
 
 	salt := v.GetString(SALT)
@@ -197,9 +209,9 @@ func main() {
 			Servers: servers,
 			Id:      raftId,
 			ClientConf: &raft.ClientConfig{
-				StreamBuildTimeout:  2 * time.Second,
-				StreamBuildAttempts: 3,
-				AppendTimeout:       3 * time.Second,
+				StreamBuildTimeout:  time.Duration(streamBuildTimeout) * time.Second,
+				StreamBuildAttempts: streamBuildAttempts,
+				AppendTimeout:       time.Duration(appendTimeout) * time.Second,
 			},
 		},
 		ElectionConfig: &raft.ElectionConfig{
