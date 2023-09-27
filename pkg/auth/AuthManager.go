@@ -15,7 +15,6 @@ import (
 var ErrUserDoesNotExist = errors.New("user does not exist")
 var ErrUsernameAlreadyTaken = errors.New("username already taken")
 var ErrInvalidLogin = errors.New("invalid login details")
-var ErrTokenMissing = errors.New("token missing")
 var ErrAtLeastOneAccount = errors.New("cannot delete all accounts, at least one must remain")
 
 type AuthManager interface {

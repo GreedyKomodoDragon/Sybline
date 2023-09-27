@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/hashicorp/go-hclog"
+	"github.com/rs/zerolog/log"
 )
 
 var ErrFailedQueueCreation = errors.New("failed to create new queue")
@@ -24,12 +24,11 @@ type Broker interface {
 	DeleteRoutingKey(routingKey, queueName string) error
 }
 
-func NewBroker(queueManager QueueManager, logger hclog.Logger) Broker {
+func NewBroker(queueManager QueueManager) Broker {
 	return broker{
 		routing:      map[string][]string{},
 		routingMut:   &sync.Mutex{},
 		queueManager: queueManager,
-		logger:       logger,
 	}
 }
 
@@ -37,7 +36,6 @@ type broker struct {
 	routing      map[string][]string
 	routingMut   *sync.Mutex
 	queueManager QueueManager
-	logger       hclog.Logger
 }
 
 func (b broker) CreateQueue(name, routingKey string, size, retryLimit uint32, hasDLQ bool) error {
@@ -46,7 +44,7 @@ func (b broker) CreateQueue(name, routingKey string, size, retryLimit uint32, ha
 	}
 
 	if err := b.queueManager.CreateQueue(name, size, retryLimit, hasDLQ); err != nil {
-		b.logger.Error("failed to create queue", "queueName", name, "err", err)
+		log.Info().Str("queueName", name).Err(err).Msg("failed to create queue")
 		return ErrFailedQueueCreation
 	}
 
@@ -93,7 +91,7 @@ func (b broker) AddMessage(routingKey string, data []byte, id []byte) error {
 
 	keys, ok := b.routing[routingKey]
 	if !ok {
-		b.logger.Error("failed to find routing key", "routingKey", routingKey)
+		log.Error().Str("routingKey", routingKey).Msg("failed to find routing key")
 		return ErrRoutingKeyDoesNotExist
 	}
 
@@ -105,7 +103,7 @@ func (b broker) AddMessage(routingKey string, data []byte, id []byte) error {
 			defer wg.Done()
 			// ignore any errors -> silent drop
 			if err := b.queueManager.AddMessage(key, data, id); err != nil {
-				b.logger.Error("failed to add message", "queue", key, "id", id, "err", err)
+				log.Error().Bytes("id", id).Err(err).Str("key", key).Msg("failed to add message")
 			}
 		}(key)
 	}
@@ -194,7 +192,7 @@ func (b broker) BatchAddMessage(routingKey string, datas [][]byte, ids [][]byte)
 
 	keys, ok := b.routing[routingKey]
 	if !ok {
-		b.logger.Error("failed to find routing key", "routingKey", routingKey)
+		log.Error().Str("routingKey", routingKey).Msg("failed to find routing key")
 		return ErrRoutingKeyDoesNotExist
 	}
 
@@ -207,7 +205,7 @@ func (b broker) BatchAddMessage(routingKey string, datas [][]byte, ids [][]byte)
 
 			// ignore any errors -> silent drop
 			if err := b.queueManager.BatchAddMessage(key, datas, ids); err != nil {
-				b.logger.Error("failed to add message", "routingKey", routingKey)
+				log.Error().Str("routingKey", routingKey).Msg("failed to add message")
 			}
 		}(i, key)
 	}

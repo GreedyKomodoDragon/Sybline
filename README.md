@@ -5,6 +5,7 @@ Sybline is a message broker providing a reliable way to handle message queues. I
 The Sybline broker aims to provide features such as message persistence, routing, and delivery guarantees. Designed to be lightweight and easy to deploy. Sybline uses Raft Consensus to ensure High Availability(HA).
 
 ## Current State
+
 It is not production ready & probably should not be used in anything important. Below is the roadmap for feature that are planned to be coming to Sybline; though subject to change. Any other features are not in the pipeline and may not be added.
 
 Likely to have bugs and be unstable.
@@ -13,6 +14,7 @@ Likely to have bugs and be unstable.
 Sybline is developed in a container-first approach, meaning almost none of the development is done outside of a docker-compose system. This ensures that features are developed with High Availability in mind.
 
 ### Developed and Tested On:
+
 Only ever developed/tested on MacOS within a docker compose cluster.
 
 Versions:
@@ -22,11 +24,13 @@ Versions:
 Currently no plans to run/test Sybline outside of a linux-based container.
 
 ## Proto Generation Script For Golang
+
 ```
 protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     mq.proto
 ```
 ## Sybline Client Languages Offically supported 
+
 Languages and links to offical repos:
-- [Go]()
+- [Go](https://github.com/GreedyKomodoDragon/sybline-go/tree/main)

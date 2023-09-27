@@ -3,7 +3,7 @@ package core
 import (
 	"errors"
 
-	"github.com/hashicorp/go-hclog"
+	"github.com/rs/zerolog/log"
 )
 
 var ErrInvalidQueueName = errors.New("invalid queue name")
@@ -16,16 +16,14 @@ type ConsumerManager interface {
 	BatchNack(name string, ids [][]byte, consumerID []byte) error
 }
 
-func NewConsumerManager(queueManager QueueManager, logger hclog.Logger) ConsumerManager {
+func NewConsumerManager(queueManager QueueManager) ConsumerManager {
 	return consumerManager{
 		queueManager: queueManager,
-		logger:       logger,
 	}
 }
 
 type consumerManager struct {
 	queueManager QueueManager
-	logger       hclog.Logger
 }
 
 func (c consumerManager) GetMessages(name string, amount uint32, consumerID []byte, time int64) ([]Message, error) {
@@ -35,7 +33,7 @@ func (c consumerManager) GetMessages(name string, amount uint32, consumerID []by
 
 	messages, err := c.queueManager.GetMessage(name, amount, consumerID, time)
 	if err != nil {
-		c.logger.Error("failed to get message", name, err)
+		log.Error().Err(err).Str("name", name).Msg("failed to get message")
 		return nil, err
 	}
 
@@ -44,7 +42,7 @@ func (c consumerManager) GetMessages(name string, amount uint32, consumerID []by
 
 func (c consumerManager) Ack(name string, messageId []byte, consumerID []byte) error {
 	if err := c.queueManager.Ack(name, consumerID, messageId); err != nil {
-		c.logger.Error("failed to acknowledge message", "queueName", name, "id", messageId, "err", err)
+		log.Error().Err(err).Bytes("id", messageId).Str("queueName", name).Msg("failed to get message")
 		return err
 	}
 
@@ -53,7 +51,7 @@ func (c consumerManager) Ack(name string, messageId []byte, consumerID []byte) e
 
 func (c consumerManager) BatchAck(name string, messageIds [][]byte, consumerID []byte) error {
 	if err := c.queueManager.BatchAck(name, consumerID, messageIds); err != nil {
-		c.logger.Error("failed to batch acknowledge message", "queueName", name, "messageids", messageIds, "err", err)
+		log.Error().Err(err).Interface("messageids", messageIds).Str("queueName", name).Msg("failed to batch acknowledge message")
 		return err
 	}
 
@@ -62,7 +60,7 @@ func (c consumerManager) BatchAck(name string, messageIds [][]byte, consumerID [
 
 func (c consumerManager) Nack(name string, id []byte, consumerID []byte) error {
 	if err := c.queueManager.Nack(name, consumerID, id); err != nil {
-		c.logger.Error("failed to nacknowledge message", "queueName", name, "id", id, "err", err)
+		log.Error().Err(err).Bytes("id", id).Str("queueName", name).Msg("failed to nacknowledge message")
 		return err
 	}
 
@@ -71,7 +69,7 @@ func (c consumerManager) Nack(name string, id []byte, consumerID []byte) error {
 
 func (c consumerManager) BatchNack(name string, messageIds [][]byte, consumerID []byte) error {
 	if err := c.queueManager.BatchNack(name, consumerID, messageIds); err != nil {
-		c.logger.Error("failed to batch nacknowledge messages", "queueName", name, "err", err)
+		log.Error().Err(err).Interface("messageids", messageIds).Str("queueName", name).Msg("failed to batch nacknowledge message")
 		return err
 	}
 

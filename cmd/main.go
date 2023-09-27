@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
@@ -14,30 +15,27 @@ import (
 
 	"time"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
+	"github.com/GreedyKomodoDragon/raft"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	serverPort               string = "SERVER_PORT"
-	raftNodeId               string = "RAFT_NODE_ID"
-	raftPort                 string = "RAFT_PORT"
-	raftVolDir               string = "RAFT_VOL_DIR"
-	TLS_ENABLED              string = "TLS_ENABLED"
-	nodes                    string = "NODES"
-	addresses                string = "ADDRESSES"
-	BATCH_LIMIT              string = "BATCH_LIMIT"
-	SNAPSHOT_THRESHOLD       string = "SNAPSHOT_THRESHOLD"
-	SNAPSHOT_RETENTION_COUNT string = "SNAPSHOT_RETENTION_COUNT"
-	CACHE_LIMIT              string = "CACHE_LIMIT"
-	HOST_IP                  string = "HOST_IP"
+	serverPort         string = "SERVER_PORT"
+	raftNodeId         string = "RAFT_NODE_ID"
+	TLS_ENABLED        string = "TLS_ENABLED"
+	nodes              string = "NODES"
+	addresses          string = "ADDRESSES"
+	SNAPSHOT_THRESHOLD string = "SNAPSHOT_THRESHOLD"
 
-	ELECTION_TIMEOUT     string = "ELECTION_TIMEOUT"
-	HEARTBEAT_TIMEOUT    string = "HEARTBEAT_TIMEOUT"
-	LEADER_LEASE_TIMEOUT string = "HEARTBEAT_TIMEOUT"
+	ELECTION_TIMEOUT  string = "ELECTION_TIMEOUT"
+	HEARTBEAT_TIMEOUT string = "HEARTBEAT_TIMEOUT"
+
+	STREAM_BUILD_TIMEOUT  string = "STREAM_BUILD_TIMEOUT"
+	STREAM_BUILD_ATTEMPTS string = "STREAM_BUILD_ATTEMPTS"
+	APPEND_TIMEOUT        string = "APPEND_TIMEOUT"
 
 	REDIS_IP       string = "REDIS_IP"
 	TOKEN_DURATION string = "TOKEN_DURATION"
@@ -45,25 +43,17 @@ const (
 	REDIS_PASSWORD string = "REDIS_PASSWORD"
 
 	NODE_TTL string = "NODE_TTL"
-
-	SALT string = "SALT"
+	SALT     string = "SALT"
 )
 
 var confKeys = []string{
 	serverPort,
 	raftNodeId,
-	raftPort,
-	raftVolDir,
 	nodes,
 	addresses,
-	BATCH_LIMIT,
 	SNAPSHOT_THRESHOLD,
-	SNAPSHOT_RETENTION_COUNT,
-	CACHE_LIMIT,
-	HOST_IP,
 	ELECTION_TIMEOUT,
 	HEARTBEAT_TIMEOUT,
-	LEADER_LEASE_TIMEOUT,
 	REDIS_IP,
 	TOKEN_DURATION,
 	REDIS_DATABASE,
@@ -81,13 +71,8 @@ func main() {
 		return
 	}
 
-	hostIP := v.GetString(HOST_IP)
-	if hostIP == "" {
-		log.Fatalf("HOST_IP is required")
-	}
-
-	raftId := v.GetString(raftNodeId)
-	if raftId == "" {
+	raftId := v.GetUint64(raftNodeId)
+	if raftId == 0 {
 		log.Fatalf("RAFT_NODE_ID is required")
 	}
 
@@ -96,24 +81,29 @@ func main() {
 		nodeTTL = 5 * 60
 	}
 
-	raftPortNum := v.GetInt(raftPort)
-	if raftPortNum == 0 {
-		raftPortNum = 1111
-	}
-
-	volDir := v.GetString(raftVolDir)
-	if volDir == "" {
-		log.Fatalf("RAFT_VOL_DIR is required")
-	}
-
 	redisIP := v.GetString(REDIS_IP)
-	if raftId == "" {
+	if redisIP == "" {
 		log.Fatalf("REDIS_IP is required")
 	}
 
 	tokenDuration := v.GetInt64(TOKEN_DURATION)
 	if tokenDuration == 0 {
 		tokenDuration = 1800
+	}
+
+	streamBuildTimeout := v.GetInt(STREAM_BUILD_TIMEOUT)
+	if streamBuildTimeout == 0 {
+		streamBuildTimeout = 2
+	}
+
+	streamBuildAttempts := v.GetInt(STREAM_BUILD_ATTEMPTS)
+	if streamBuildAttempts == 0 {
+		streamBuildAttempts = 3
+	}
+
+	appendTimeout := v.GetInt(APPEND_TIMEOUT)
+	if appendTimeout == 0 {
+		appendTimeout = 3
 	}
 
 	salt := v.GetString(SALT)
@@ -159,21 +149,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	lgr := hclog.New(&hclog.LoggerOptions{
-		Name:  "sybline-logger",
-		Level: hclog.LevelFromString("debug"),
-	})
-
 	queueMan := core.NewQueueManager(nodeTTL)
-	broker := core.NewBroker(queueMan, lgr)
-	consumer := core.NewConsumerManager(queueMan, lgr)
+	broker := core.NewBroker(queueMan)
+	consumer := core.NewConsumerManager(queueMan)
 
 	tDur := time.Second * time.Duration(tokenDuration)
 	authManger := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur)
 	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
-
-	raftConfig := raft.DefaultConfig()
-	raftConfig.LocalID = raft.ServerID(raftId)
 
 	electionTimeout := v.GetInt(ELECTION_TIMEOUT)
 	if electionTimeout == 0 {
@@ -185,99 +167,60 @@ func main() {
 		heartbeatTimeout = 2
 	}
 
-	leaderLeaseTimeout := v.GetInt(LEADER_LEASE_TIMEOUT)
-	if leaderLeaseTimeout == 0 {
-		leaderLeaseTimeout = 2
-	}
-
-	raftConfig.ElectionTimeout = time.Second * time.Duration(electionTimeout)
-	raftConfig.HeartbeatTimeout = time.Second * time.Duration(heartbeatTimeout)
-	raftConfig.LeaderLeaseTimeout = time.Second * time.Duration(leaderLeaseTimeout)
-
 	snapshotThreshold := v.GetUint64(SNAPSHOT_THRESHOLD)
 	if snapshotThreshold == 0 {
 		snapshotThreshold = 10000
 	}
 
-	raftConfig.SnapshotThreshold = snapshotThreshold
-
-	snapshotRetentionCount := v.GetInt(SNAPSHOT_RETENTION_COUNT)
-	if snapshotRetentionCount == 0 {
-		snapshotRetentionCount = 3
-	}
-
-	snapshotStore, err := raft.NewFileSnapshotStore(volDir, snapshotRetentionCount, os.Stdout)
+	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	batchLimit := v.GetUint64(BATCH_LIMIT)
-	if batchLimit == 0 {
-		batchLimit = 1000
-	}
-
-	// Wrap the store in a LogCache to improve performance.
-	cacheLimit := v.GetInt(CACHE_LIMIT)
-	if cacheLimit == 0 {
-		cacheLimit = 100
-	}
-
-	store := fsm.NewStableStore(batchLimit, uint64(cacheLimit))
-
-	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan, store)
+	logStore, err := raft.NewLogStore(snapshotThreshold)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("failed to create logstore: %v", err)
 	}
+	grpcServer := grpc.NewServer(opts...)
 
-	cacheStore, err := raft.NewLogCache(cacheLimit, store)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	raftBinAddr := fmt.Sprintf("%s:%d", hostIP, raftPortNum)
-
-	tcpAddr, err := net.ResolveTCPAddr("tcp", raftBinAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	transport, err := raft.NewTCPTransport(raftBinAddr, tcpAddr, 3, 10*time.Second, os.Stdout)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	raftConfig.Logger = lgr
-
-	raftServer, err := raft.NewRaft(raftConfig, fsmStore, cacheStore, store, snapshotStore, transport)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	nodes := strings.Split(v.GetString(nodes), ",")
 	addresses := strings.Split(v.GetString(addresses), ",")
 
-	servers := []raft.Server{
-		{
-			ID:      raft.ServerID(raftConfig.LocalID),
-			Address: transport.LocalAddr(),
-		},
+	servers := []raft.Server{}
+	ids := strings.Split(v.GetString(nodes), ",")
+	if len(ids) != len(addresses) {
+		log.Fatal("addresses and ids must be same length")
 	}
 
-	for i, node := range nodes {
+	for i, address := range addresses {
+		id, err := strconv.ParseUint(ids[i], 10, 64)
+		if err != nil {
+			log.Fatal("invalid id passed in")
+		}
+
 		servers = append(servers, raft.Server{
-			Suffrage: raft.Voter,
-			ID:       raft.ServerID(node),
-			Address:  raft.ServerAddress(addresses[i]),
+			Address: address,
+			Id:      id,
+			Opts:    []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
 		})
 	}
 
-	// always starts single server as a leader
-	configuration := raft.Configuration{
-		Servers: servers,
-	}
+	raftServer := raft.NewRaftServer(fsmStore, logStore, grpcServer, &raft.Configuration{
+		RaftConfig: &raft.RaftConfig{
+			Servers: servers,
+			Id:      raftId,
+			ClientConf: &raft.ClientConfig{
+				StreamBuildTimeout:  time.Duration(streamBuildTimeout) * time.Second,
+				StreamBuildAttempts: streamBuildAttempts,
+				AppendTimeout:       time.Duration(appendTimeout) * time.Second,
+			},
+		},
+		ElectionConfig: &raft.ElectionConfig{
+			ElectionTimeout:  time.Duration(electionTimeout) * time.Second,
+			HeartbeatTimeout: time.Duration(heartbeatTimeout) * time.Second,
+		},
+	})
 
-	raftServer.BootstrapCluster(configuration)
-	grpcServer := grpc.NewServer(opts...)
+	raftServer.Start()
 
 	log.Println("listening on port: ", port)
 	grpcServer.RegisterService(&handler.MQEndpoints_ServiceDesc, handler.NewServer(authManger, raftServer, salt))

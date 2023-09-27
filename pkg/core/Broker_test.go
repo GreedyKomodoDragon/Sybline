@@ -5,18 +5,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 )
 
-var lgr = hclog.New(&hclog.LoggerOptions{
-	Name:  "sybline-logger",
-	Level: hclog.LevelFromString("debug"),
-})
-
 func TestBroker_CreateQueue_Sync(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 
@@ -29,7 +23,7 @@ func TestBroker_CreateQueue_Sync(t *testing.T) {
 
 func TestBroker_Can_Send_Via_Message_Routing(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 
@@ -73,7 +67,7 @@ func TestBroker_Can_Send_Via_Message_Routing(t *testing.T) {
 
 func TestBroker_Delete_Queue(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 
@@ -94,7 +88,7 @@ func TestBroker_Delete_Queue(t *testing.T) {
 
 func TestBroker_Add_Route_Key(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 	routingKeyTwo := "routeTwo"
@@ -119,7 +113,7 @@ func TestBroker_Add_Route_Key(t *testing.T) {
 
 func TestBroker_Delete_Routing_Keys(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 	routingKeyTwo := "routeTwo"
@@ -139,7 +133,7 @@ func TestBroker_Delete_Routing_Keys(t *testing.T) {
 
 func TestBroker_Can_Batch_Messages(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 
@@ -185,7 +179,7 @@ func TestBroker_Can_Batch_Messages(t *testing.T) {
 
 func TestBroker_Can_Batch_Messages_Empty_Message(t *testing.T) {
 	q := core.NewQueueManager(5 * 60)
-	b := core.NewBroker(q, lgr)
+	b := core.NewBroker(q)
 
 	routingKey := "route"
 
