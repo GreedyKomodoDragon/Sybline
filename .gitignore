@@ -3,6 +3,7 @@ mq.pb.go
 
 .DS_Store
 node_*
+prometheus_data
 cache
 
 *.crt

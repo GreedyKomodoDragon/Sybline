@@ -18,12 +18,14 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var ErrNoAuthToken = errors.New("no valid auth token provided")
-var ErrInvalidCredentials = errors.New("invalid credentials could not login")
-var ErrNotLeader = errors.New("cannot communicate with non-leader nodes")
-var ErrRaftNotIntialised = errors.New("raft server not running")
-var ErrResponseCastFailed = errors.New("unable to cast response to the expected type")
-var ErrMetaDataNotFound = errors.New("unable to get authenication metadata")
+var (
+	ErrNoAuthToken        = errors.New("no valid auth token provided")
+	ErrInvalidCredentials = errors.New("invalid credentials could not login")
+	ErrNotLeader          = errors.New("cannot communicate with non-leader nodes")
+	ErrRaftNotIntialised  = errors.New("raft server not running")
+	ErrResponseCastFailed = errors.New("unable to cast response to the expected type")
+	ErrMetaDataNotFound   = errors.New("unable to get authenication metadata")
+)
 
 type MQEndpointsServer interface {
 	SubmitMessage(context.Context, *messages.MessageInfo) (*messages.Status, error)
