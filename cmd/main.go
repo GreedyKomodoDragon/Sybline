@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -38,9 +37,11 @@ import (
 )
 
 const (
-	serverPort         string = "SERVER_PORT"
-	raftNodeId         string = "RAFT_NODE_ID"
-	TLS_ENABLED        string = "TLS_ENABLED"
+	serverPort      string = "SERVER_PORT"
+	raftNodeId      string = "RAFT_NODE_ID"
+	TLS_ENABLED     string = "TLS_ENABLED"
+	TLS_VERIFY_SKIP string = "TLS_VERIFY_SKIP"
+
 	nodes              string = "NODES"
 	addresses          string = "ADDRESSES"
 	SNAPSHOT_THRESHOLD string = "SNAPSHOT_THRESHOLD"
@@ -77,27 +78,27 @@ var confKeys = []string{
 	SALT,
 }
 
-func createTLSConfig(certFile, serverName string) (*tls.Config, error) {
+func createTLSConfig(caCertFile, certFile, keyFile string, skipVerification bool) (*tls.Config, error) {
 	// Load the CA certificate to validate the server's certificate.
-	caCert, err := ioutil.ReadFile(certFile)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a certificate pool and add the CA certificate.
 	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(caCert) {
+	caCert, err := os.ReadFile(caCertFile)
+	if err != nil {
 		return nil, err
 	}
+	certPool.AppendCertsFromPEM(caCert)
 
-	// Create a TLS configuration with the certificate pool.
-	tlsConfig := &tls.Config{
+	// Create a TLS configuration with the certificate and key.
+	return &tls.Config{
+		Certificates:       []tls.Certificate{cert},
 		RootCAs:            certPool,
-		ServerName:         serverName,
-		InsecureSkipVerify: false, // Set to true if you want to skip server certificate validation (not recommended for production).
-	}
-
-	return tlsConfig, nil
+		InsecureSkipVerify: skipVerification,
+	}, nil
 }
 
 func main() {
@@ -107,9 +108,11 @@ func main() {
 	v.AutomaticEnv()
 
 	if err := v.BindEnv(confKeys...); err != nil {
-		// log.Fatal(err)
+		log.Fatal().Err(err)
 		return
 	}
+
+	skipVerification := v.GetBool(TLS_VERIFY_SKIP)
 
 	raftId := v.GetUint64(raftNodeId)
 	if raftId == 0 {
@@ -150,6 +153,10 @@ func main() {
 	if salt == "" {
 		log.Fatal().Msg("SALT is required")
 	}
+
+	caCertFile := "./cert/ca-cert.pem"
+	certFile := "./cert/cert.pem"
+	keyFile := "./cert/key.pem"
 
 	redisPassword := v.GetString(REDIS_PASSWORD)
 	redisDatabase := v.GetInt(REDIS_DATABASE)
@@ -210,11 +217,11 @@ func main() {
 	isTLSEnabled := v.GetBool(TLS_ENABLED)
 
 	if isTLSEnabled {
-		creds, err := credentials.NewServerTLSFromFile("./cert/certificate.crt", "./cert/private.key")
+		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
 		if err != nil {
 			log.Fatal().Msg("Failed to generate credentials: " + err.Error())
 		}
-		opts = []grpc.ServerOption{grpc.Creds(creds)}
+		opts = []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
 	}
 
 	// log directory - Create a folder/directory at a full qualified path
@@ -274,7 +281,7 @@ func main() {
 		clientOpts := []grpc.DialOption{}
 		if isTLSEnabled {
 			// Create a TLS configuration.
-			tlsConfig, err := createTLSConfig("./cert/certificate.crt", "./cert/private.key")
+			tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
 			if err != nil {
 				log.Fatal().Err(err).Msg("Failed to create TLS config")
 			}
