@@ -37,10 +37,15 @@ import (
 )
 
 const (
-	serverPort      string = "SERVER_PORT"
-	raftNodeId      string = "RAFT_NODE_ID"
+	serverPort string = "SERVER_PORT"
+	PROM_PORT  string = "PROM_PORT"
+	raftNodeId string = "RAFT_NODE_ID"
+
 	TLS_ENABLED     string = "TLS_ENABLED"
 	TLS_VERIFY_SKIP string = "TLS_VERIFY_SKIP"
+
+	TLS_ENABLED_PROM     string = "TLS_ENABLED_PROM"
+	TLS_VERIFY_SKIP_PROM string = "TLS_VERIFY_SKIP_PROM"
 
 	nodes              string = "NODES"
 	addresses          string = "ADDRESSES"
@@ -112,8 +117,6 @@ func main() {
 		return
 	}
 
-	skipVerification := v.GetBool(TLS_VERIFY_SKIP)
-
 	raftId := v.GetUint64(raftNodeId)
 	if raftId == 0 {
 		log.Fatal().Msg("RAFT_NODE_ID is required")
@@ -158,6 +161,12 @@ func main() {
 	certFile := "./cert/cert.pem"
 	keyFile := "./cert/key.pem"
 
+	skipVerification := v.GetBool(TLS_VERIFY_SKIP)
+	isTLSEnabled := v.GetBool(TLS_ENABLED)
+
+	skipVerificationProm := v.GetBool(TLS_VERIFY_SKIP_PROM)
+	isTLSEnabledProm := v.GetBool(TLS_ENABLED_PROM)
+
 	redisPassword := v.GetString(REDIS_PASSWORD)
 	redisDatabase := v.GetInt(REDIS_DATABASE)
 
@@ -169,6 +178,11 @@ func main() {
 	port := v.GetInt(serverPort)
 	if port == 0 {
 		port = 2221
+	}
+
+	promPort := v.GetInt(PROM_PORT)
+	if port == 0 {
+		port = 8080
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -197,8 +211,35 @@ func main() {
 	}
 
 	// Expose Prometheus metrics endpoint.
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":8080", nil)
+	// Create an HTTP server for /metrics with TLS
+	metricsServer := &http.Server{
+		Addr:    ":" + strconv.Itoa(promPort), // Choose the desired port
+		Handler: promhttp.Handler(),
+	}
+
+	if isTLSEnabledProm {
+		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerificationProm)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+
+		metricsServer.TLSConfig = tlsConfig
+	}
+
+	go func() {
+		log.Info().Msg("Metrics server is running on :" + strconv.Itoa(promPort))
+
+		if isTLSEnabledProm {
+			if err := metricsServer.ListenAndServeTLS("", ""); err != nil {
+				log.Fatal().Err(err).Msg("Failed to start metrics server with TLS")
+			}
+			return
+		}
+
+		if err := metricsServer.ListenAndServe(); err != nil {
+			log.Fatal().Err(err).Msg("Failed to start metrics server")
+		}
+	}()
 
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
@@ -213,8 +254,6 @@ func main() {
 			recovery.StreamServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
 		),
 	}
-
-	isTLSEnabled := v.GetBool(TLS_ENABLED)
 
 	if isTLSEnabled {
 		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
