@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -72,6 +75,29 @@ var confKeys = []string{
 	REDIS_PASSWORD,
 	TLS_ENABLED,
 	SALT,
+}
+
+func createTLSConfig(certFile, serverName string) (*tls.Config, error) {
+	// Load the CA certificate to validate the server's certificate.
+	caCert, err := ioutil.ReadFile(certFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a certificate pool and add the CA certificate.
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, err
+	}
+
+	// Create a TLS configuration with the certificate pool.
+	tlsConfig := &tls.Config{
+		RootCAs:            certPool,
+		ServerName:         serverName,
+		InsecureSkipVerify: false, // Set to true if you want to skip server certificate validation (not recommended for production).
+	}
+
+	return tlsConfig, nil
 }
 
 func main() {
@@ -229,8 +255,8 @@ func main() {
 	if err != nil {
 		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
-	grpcServer := grpc.NewServer(opts...)
 
+	grpcServer := grpc.NewServer(opts...)
 	addresses := strings.Split(v.GetString(addresses), ",")
 
 	servers := []raft.Server{}
@@ -245,10 +271,23 @@ func main() {
 			log.Fatal().Msg("invalid id passed in")
 		}
 
+		clientOpts := []grpc.DialOption{}
+		if isTLSEnabled {
+			// Create a TLS configuration.
+			tlsConfig, err := createTLSConfig("./cert/certificate.crt", "./cert/private.key")
+			if err != nil {
+				log.Fatal().Err(err).Msg("Failed to create TLS config")
+			}
+
+			clientOpts = append(clientOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+		} else {
+			clientOpts = append(clientOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		}
+
 		servers = append(servers, raft.Server{
 			Address: address,
 			Id:      id,
-			Opts:    []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
+			Opts:    clientOpts,
 		})
 	}
 
