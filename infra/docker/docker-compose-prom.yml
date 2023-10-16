@@ -1,0 +1,103 @@
+version: '3.1'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - '9090:9090'
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.2
+
+  session:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - ./cache:/data
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.3
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  node_1:
+    image: sybline
+    hostname: node_1
+    mem_limit: 1000m
+    env_file:
+      - sybline_one.env
+    volumes:
+      - './node_1_data:/node_data'
+      - './cert:/cert'
+    ports:
+      - 2221:2221
+      - 8080:8080
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.4
+    depends_on:
+      session:
+        condition: service_healthy
+
+  node_2:
+    image: sybline
+    hostname: node_2
+    mem_limit: 1000m
+    env_file:
+      - sybline_two.env
+    volumes:
+      - './node_2_data:/node_data'
+      - './cert:/cert'
+    ports:
+      - 2222:2221
+      - 8081:8080
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.5
+    depends_on:
+      session:
+        condition: service_healthy
+
+  node_3:
+    image: sybline
+    hostname: node_3
+    mem_limit: 1000m
+    env_file:
+      - sybline_three.env
+    volumes:
+      - './node_3_data:/node_data'
+      - './cert:/cert'
+    ports:
+      - 2223:2221
+      - 8082:8080
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.6
+    depends_on:
+      session:
+        condition: service_healthy
+
+networks:
+  webnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
