@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/GreedyKomodoDragon/raft"
+	"github.com/pkg/profile"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -107,6 +108,9 @@ func createTLSConfig(caCertFile, certFile, keyFile string, skipVerification bool
 }
 
 func main() {
+	val := profile.Start(profile.MemProfile)
+	defer val.Stop()
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	var v = viper.New()

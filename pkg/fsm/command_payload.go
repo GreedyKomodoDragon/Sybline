@@ -1,8 +1,8 @@
 package fsm
 
 type CommandPayload struct {
-	Op   Operation `json:"o"`
-	Data []byte    `json:"d"`
+	Op   Operation   `json:"o"`
+	Data interface{} `json:"d"`
 }
 
 func (c *CommandPayload) Reset() {

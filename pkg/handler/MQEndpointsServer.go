@@ -48,19 +48,25 @@ type MQEndpointsServer interface {
 	mustEmbedUnimplementedMQEndpointsServer()
 }
 type mQEndpointsServer struct {
-	authManager   auth.AuthManager
-	raftServer    raft.Raft
-	salt          string
-	getObjectPool *GetObjectPool
+	authManager    auth.AuthManager
+	raftServer     raft.Raft
+	salt           string
+	getObjectPool  *ObjectPool[structs.RequestMessageData]
+	getCommandPool *ObjectPool[fsm.CommandPayload]
 	unimplementedMQEndpointsServer
 }
 
 func NewServer(authManager auth.AuthManager, raftServer raft.Raft, salt string) MQEndpointsServer {
 	return mQEndpointsServer{
-		authManager:   authManager,
-		raftServer:    raftServer,
-		salt:          salt,
-		getObjectPool: NewGetObjectPool(10000),
+		authManager: authManager,
+		raftServer:  raftServer,
+		salt:        salt,
+		getObjectPool: NewObjectPool[structs.RequestMessageData](10000, func() structs.RequestMessageData {
+			return structs.RequestMessageData{}
+		}),
+		getCommandPool: NewObjectPool[fsm.CommandPayload](10000, func() fsm.CommandPayload {
+			return fsm.CommandPayload{}
+		}),
 	}
 }
 
@@ -594,16 +600,11 @@ func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *messages.BatchNac
 }
 
 func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}) (interface{}, error) {
-	jsonBytes, err := msgpack.Marshal(payload)
-	if err != nil {
-		return &fsm.ApplyResponse{}, err
-	}
+	obj := s.getCommandPool.GetObject()
+	obj.Data = payload
+	obj.Op = payloadType
 
-	data, err := msgpack.Marshal(fsm.CommandPayload{
-		Op:   payloadType,
-		Data: jsonBytes,
-	})
-
+	data, err := msgpack.Marshal(obj)
 	if err != nil {
 		return &fsm.ApplyResponse{}, err
 	}
