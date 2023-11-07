@@ -3,7 +3,7 @@
 set -e # Exit immediately if a command fails
 
 # Default Docker Compose file
-DOCKER_COMPOSE_FILE="infra/docker/docker-compose-prom.yml"
+DOCKER_COMPOSE_FILE="infra/docker/docker-compose-local.yml"
 
 # Parse command line options
 while getopts "f:" opt; do
@@ -18,9 +18,9 @@ while getopts "f:" opt; do
   esac
 done
 
-echo "Removing node_* directories..."
-rm -rf infra/docker/node_*
-rm -rf infra/docker/cache*
+# echo "Removing node_* directories..."
+# rm -rf infra/docker/node_*
+# rm -rf infra/docker/cache*
 
 echo "Stopping Docker Compose..."
 docker-compose -f "$DOCKER_COMPOSE_FILE" down

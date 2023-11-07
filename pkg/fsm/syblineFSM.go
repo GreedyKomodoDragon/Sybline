@@ -37,7 +37,7 @@ func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.
 // Apply log is invoked once a log entry is committed.
 func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 	// ignore if RAFT_LOG
-	if lg.LogType == raft.RAFT_LOG || lg.LogType == 0 {
+	if lg.LogType == raft.RAFT_LOG || len(lg.Data) == 0 {
 		return nil, nil
 	}
 

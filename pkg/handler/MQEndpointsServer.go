@@ -48,19 +48,25 @@ type MQEndpointsServer interface {
 	mustEmbedUnimplementedMQEndpointsServer()
 }
 type mQEndpointsServer struct {
-	authManager   auth.AuthManager
-	raftServer    raft.Raft
-	salt          string
-	getObjectPool *GetObjectPool
+	authManager    auth.AuthManager
+	raftServer     raft.Raft
+	salt           string
+	getObjectPool  *ObjectPool[structs.RequestMessageData]
+	getCommandPool *ObjectPool[fsm.CommandPayload]
 	unimplementedMQEndpointsServer
 }
 
 func NewServer(authManager auth.AuthManager, raftServer raft.Raft, salt string) MQEndpointsServer {
 	return mQEndpointsServer{
-		authManager:   authManager,
-		raftServer:    raftServer,
-		salt:          salt,
-		getObjectPool: NewGetObjectPool(10000),
+		authManager: authManager,
+		raftServer:  raftServer,
+		salt:        salt,
+		getObjectPool: NewObjectPool[structs.RequestMessageData](10000, func() structs.RequestMessageData {
+			return structs.RequestMessageData{}
+		}),
+		getCommandPool: NewObjectPool[fsm.CommandPayload](10000, func() fsm.CommandPayload {
+			return fsm.CommandPayload{}
+		}),
 	}
 }
 
@@ -599,16 +605,21 @@ func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interf
 		return &fsm.ApplyResponse{}, err
 	}
 
+	obj := s.getCommandPool.GetObject()
+	obj.Op = payloadType
+
 	data, err := msgpack.Marshal(fsm.CommandPayload{
 		Op:   payloadType,
 		Data: jsonBytes,
 	})
 
+	obj.Data = jsonBytes
+
 	if err != nil {
 		return &fsm.ApplyResponse{}, err
 	}
 
-	return s.raftServer.ApplyLog(data, raft.DATA_LOG)
+	return s.raftServer.ApplyLog(&data, raft.DATA_LOG)
 }
 
 // UnsafeMQEndpointsServer may be embedded to opt out of forward compatibility for this service.

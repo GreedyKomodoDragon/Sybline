@@ -78,7 +78,7 @@ func NewQueue(size, fetchLimit uint32, nodeTTL int64, deadLetter *Queue) Queue {
 	}
 }
 
-// AddNode adds a new node with the given id to the linked list.
+// Enqueue adds a new node with the given id to the linked list.
 func (ll *LinkedList) Enqueue(id []byte, val []byte) {
 	newNode := ll.objPool.GetObject()
 	newNode.ID = id
@@ -104,6 +104,8 @@ func (ll *LinkedList) Enqueue(id []byte, val []byte) {
 	ll.Tail.Next = newNode
 	ll.Tail = newNode
 	ll.Amount.Increment()
+
+	fmt.Println("here")
 }
 
 func (ll *LinkedList) BatchEnqueue(messages []MessageBatch) {

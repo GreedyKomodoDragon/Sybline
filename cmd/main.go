@@ -181,8 +181,8 @@ func main() {
 	}
 
 	promPort := v.GetInt(PROM_PORT)
-	if port == 0 {
-		port = 8080
+	if promPort == 0 {
+		promPort = 8080
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -199,7 +199,6 @@ func main() {
 	)
 
 	prometheus.MustRegister(srvMetrics)
-
 	panicsTotal := promauto.NewCounter(prometheus.CounterOpts{
 		Name: "grpc_req_panics_recovered_total",
 		Help: "Total number of gRPC requests recovered from internal panic.",
@@ -227,7 +226,7 @@ func main() {
 	}
 
 	go func() {
-		log.Info().Msg("Metrics server is running on :" + strconv.Itoa(promPort))
+		log.Info().Int("port", promPort).Msg("Metrics server is running")
 
 		if isTLSEnabledProm {
 			if err := metricsServer.ListenAndServeTLS("", ""); err != nil {
