@@ -32,19 +32,19 @@ if [ -z "$tag" ]; then
 fi
 
 # Build the Docker container with the specified tag
-docker build -t "$image_name:$tag" -f ./infra/docker/sybline.dockerfile .
-docker build -t "$image_name-ubi:$tag" -f ./infra/docker/UBI.dockerfile .
+docker build -t "greedykomodo/$image_name:$tag" -f ./infra/docker/sybline.dockerfile .
+docker build -t "greedykomodo/$image_name-ubi:$tag" -f ./infra/docker/UBI.dockerfile .
 
 # Push the containers to Docker Hub if the push flag is set
 if [ "$push" = true ]; then
-    docker push "$image_name:$tag"
-    docker push "$image_name-ubi:$tag"
+    docker push "greedykomodo/$image_name:$tag"
+    docker push "greedykomodo/$image_name-ubi:$tag"
     
     # Tag the containers as "latest" if the flag is set
     if [ "$latest" = true ]; then
-        docker tag "$image_name:$tag" "$image_name:latest"
-        docker tag "$image_name-ubi:$tag" "$image_name-ubi:latest"
-        docker push "$image_name:latest"
-        docker push "$image_name-ubi:latest"
+        docker tag "greedykomodo/$image_name:$tag" "greedykomodo/$image_name:latest"
+        ddocker tag "greedykomodo/$image_name-ubi:$tag" "greedykomodo/$image_name-ubi:latest"
+        docker push "greedykomodo/$image_name:latest"
+        docker push "greedykomodo/$image_name-ubi:latest"
     fi
 fi
