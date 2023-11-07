@@ -609,7 +609,7 @@ func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interf
 		return &fsm.ApplyResponse{}, err
 	}
 
-	return s.raftServer.ApplyLog(data, raft.DATA_LOG)
+	return s.raftServer.ApplyLog(&data, raft.DATA_LOG)
 }
 
 // UnsafeMQEndpointsServer may be embedded to opt out of forward compatibility for this service.

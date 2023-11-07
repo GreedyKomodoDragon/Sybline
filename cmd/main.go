@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/GreedyKomodoDragon/raft"
-	"github.com/pkg/profile"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -108,9 +107,6 @@ func createTLSConfig(caCertFile, certFile, keyFile string, skipVerification bool
 }
 
 func main() {
-	val := profile.Start(profile.MemProfile)
-	defer val.Stop()
-
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	var v = viper.New()
@@ -185,8 +181,8 @@ func main() {
 	}
 
 	promPort := v.GetInt(PROM_PORT)
-	if port == 0 {
-		port = 8080
+	if promPort == 0 {
+		promPort = 8080
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -231,7 +227,7 @@ func main() {
 	}
 
 	go func() {
-		log.Info().Msg("Metrics server is running on :" + strconv.Itoa(promPort))
+		log.Info().Int("port", promPort).Msg("Metrics server is running")
 
 		if isTLSEnabledProm {
 			if err := metricsServer.ListenAndServeTLS("", ""); err != nil {
