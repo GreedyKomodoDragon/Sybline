@@ -199,7 +199,6 @@ func main() {
 	)
 
 	prometheus.MustRegister(srvMetrics)
-
 	panicsTotal := promauto.NewCounter(prometheus.CounterOpts{
 		Name: "grpc_req_panics_recovered_total",
 		Help: "Total number of gRPC requests recovered from internal panic.",

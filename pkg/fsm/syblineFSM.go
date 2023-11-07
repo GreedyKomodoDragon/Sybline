@@ -37,7 +37,7 @@ func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.
 // Apply log is invoked once a log entry is committed.
 func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 	// ignore if RAFT_LOG
-	if lg.LogType == raft.RAFT_LOG || lg.LogType == 0 {
+	if lg.LogType == raft.RAFT_LOG || len(lg.Data) == 0 {
 		return nil, nil
 	}
 
@@ -52,16 +52,29 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 
 	switch payload.Op {
 	case CREATE_QUEUE:
-		payCasted := payload.Data.(structs.QueueInfo)
+		var payCasted structs.QueueInfo
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.broker.CreateQueue(payCasted.Name, payCasted.RoutingKey, payCasted.Size,
 			payCasted.RetryLimit, payCasted.HasDLQueue)
 
 	case SUBMIT_MESSAGE:
-		payCasted := payload.Data.(structs.MessageInfo)
+		var payCasted structs.MessageInfo
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.broker.AddMessage(payCasted.Rk, payCasted.Data, payCasted.Id)
 
 	case SUBMIT_BATCH_MESSAGE:
-		payCasted := payload.Data.(structs.BatchMessages)
+		payCasted := b.batchMessage
+		defer payCasted.Reset()
+
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
 
 		var errIn error = nil
 		for _, data := range payCasted.Messages {
@@ -73,16 +86,26 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 		return nil, errIn
 
 	case ADD_ROUTING_KEY:
-		payCasted := payload.Data.(structs.AddRoute)
+		var payCasted structs.AddRoute
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
 
 		return nil, b.broker.AddRouteKey(payCasted.RouteName, payCasted.QueueName)
 
 	case DELETE_ROUTING_KEY:
-		payCasted := payload.Data.(structs.DeleteRoute)
+		var payCasted structs.DeleteRoute
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.broker.DeleteRoutingKey(payCasted.RouteName, payCasted.QueueName)
 
 	case GET_MESSAGES:
-		payCasted := payload.Data.(structs.RequestMessageData)
+		var payCasted structs.RequestMessageData
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
 
 		messages, err := b.consumer.GetMessages(payCasted.QueueName, payCasted.Amount, payCasted.ConsumerID, payCasted.Time)
 		if err != nil {
@@ -92,41 +115,76 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 		return messages, nil
 
 	case ACK:
-		payCasted := payload.Data.(structs.AckUpdate)
+		var payCasted structs.AckUpdate
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.consumer.Ack(payCasted.QueueName, payCasted.Id, payCasted.ConsumerID)
 
 	case NACK:
-		payCasted := payload.Data.(structs.AckUpdate)
+		var payCasted structs.AckUpdate
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.consumer.Nack(payCasted.QueueName, payCasted.Id, payCasted.ConsumerID)
 
 	case DELETE_QUEUE:
-		payCasted := payload.Data.(structs.DeleteQueueInfo)
+		var payCasted structs.DeleteQueueInfo
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.broker.DeleteQueue(payCasted.QueueName)
 
 	case CREATE_ACCOUNT:
-		payCasted := payload.Data.(structs.UserCreds)
+		var payCasted structs.UserCreds
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return nil, b.auth.CreateUser(payCasted.Username, payCasted.Password)
 
 	case CHANGE_PASSWORD:
-		payCasted := payload.Data.(structs.ChangeCredentials)
+		var payCasted structs.ChangeCredentials
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		return b.auth.ChangePassword(payCasted.Username, payCasted.OldPassword, payCasted.NewPassword)
 
 	case REMOVE_LOCKS:
-		payCasted := payload.Data.(structs.RemoveLocks)
+		var payCasted structs.RemoveLocks
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
+
 		b.queueManager.ReleaseAllLocksByConsumer(payCasted.ConsumerID)
 		return nil, nil
 
 	case DELETE_USER:
-		payCasted := payload.Data.(structs.UserInformation)
+		var payCasted structs.UserInformation
+		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+			return nil, err
+		}
 
 		return nil, b.auth.DeleteUser(payCasted.Username)
 
 	case BATCH_ACK:
-		data := payload.Data.(structs.BatchAckUpdate)
+		var data structs.BatchAckUpdate
+		if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
+			return nil, err
+		}
+
 		return nil, b.consumer.BatchAck(data.QueueName, data.Ids, data.ConsumerID)
 
 	case BATCH_NACK:
-		data := payload.Data.(structs.BatchNackUpdate)
+		var data structs.BatchNackUpdate
+		if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
+			return nil, err
+		}
+
 		return nil, b.consumer.BatchNack(data.QueueName, data.Ids, data.ConsumerID)
 	}
 

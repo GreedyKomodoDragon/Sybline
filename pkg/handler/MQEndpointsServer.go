@@ -600,11 +600,21 @@ func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *messages.BatchNac
 }
 
 func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}) (interface{}, error) {
+	jsonBytes, err := msgpack.Marshal(payload)
+	if err != nil {
+		return &fsm.ApplyResponse{}, err
+	}
+
 	obj := s.getCommandPool.GetObject()
-	obj.Data = payload
 	obj.Op = payloadType
 
-	data, err := msgpack.Marshal(obj)
+	data, err := msgpack.Marshal(fsm.CommandPayload{
+		Op:   payloadType,
+		Data: jsonBytes,
+	})
+
+	obj.Data = jsonBytes
+
 	if err != nil {
 		return &fsm.ApplyResponse{}, err
 	}
