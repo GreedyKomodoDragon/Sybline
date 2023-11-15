@@ -18,9 +18,9 @@ while getopts "f:" opt; do
   esac
 done
 
-# echo "Removing node_* directories..."
-# rm -rf infra/docker/node_*
-# rm -rf infra/docker/cache*
+echo "Removing node_* directories..."
+rm -rf infra/docker/node_*
+rm -rf infra/docker/cache*
 
 echo "Stopping Docker Compose..."
 docker-compose -f "$DOCKER_COMPOSE_FILE" down
