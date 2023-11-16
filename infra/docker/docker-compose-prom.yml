@@ -20,23 +20,6 @@ services:
       webnet:
         ipv4_address: 10.5.0.2
 
-  session:
-    image: redis:6.2-alpine
-    restart: always
-    ports:
-      - '6379:6379'
-    command: redis-server --save 20 1 --loglevel warning
-    volumes:
-      - ./cache:/data
-    networks:
-      webnet:
-        ipv4_address: 10.5.0.3
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-
   node_1:
     image: sybline
     hostname: node_1
@@ -52,9 +35,6 @@ services:
     networks:
       webnet:
         ipv4_address: 10.5.0.4
-    depends_on:
-      session:
-        condition: service_healthy
 
   node_2:
     image: sybline
@@ -71,9 +51,6 @@ services:
     networks:
       webnet:
         ipv4_address: 10.5.0.5
-    depends_on:
-      session:
-        condition: service_healthy
 
   node_3:
     image: sybline
@@ -90,9 +67,6 @@ services:
     networks:
       webnet:
         ipv4_address: 10.5.0.6
-    depends_on:
-      session:
-        condition: service_healthy
 
 networks:
   webnet:

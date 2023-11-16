@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GreedyKomodoDragon/raft"
 	"golang.org/x/crypto/scrypt"
+	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -26,8 +28,21 @@ type AuthManager interface {
 	GetConsumerID(md *metadata.MD) ([]byte, error)
 }
 
-func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration) AuthManager {
-	a := &authManager{
+func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server) (AuthManager, error) {
+
+	clients := []SessionClient{}
+	for _, server := range sessionServers {
+		conn, err := grpc.Dial(server.Address, server.Opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		client := NewSessionClient(conn)
+		clients = append(clients, client)
+
+	}
+
+	return &authManager{
 		credentials:    []*saltPassword{},
 		hashStrength:   32768,
 		creationMux:    &sync.Mutex{},
@@ -36,9 +51,8 @@ func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGe
 		tokenGen:       tokenGen,
 		idGen:          idGen,
 		tokenDuration:  duration,
-	}
-
-	return a
+		follSessions:   NewFollowerSessions(clients),
+	}, nil
 }
 
 type saltPassword struct {
@@ -56,6 +70,7 @@ type authManager struct {
 	tokenGen       TokenGenerator
 	idGen          IdGenerator
 	tokenDuration  time.Duration
+	follSessions   FollowerSessions
 }
 
 func (a *authManager) CreateUser(username, password string) error {
@@ -103,8 +118,14 @@ func (a *authManager) Login(username, password string) (string, error) {
 	token := a.tokenGen.Generate()
 	id := a.idGen.Generate()
 
-	if err := a.sessionHandler.AddToken(token, username, id, a.tokenDuration); err != nil {
-		return "", nil
+	ttl := time.Now().Add(a.tokenDuration)
+
+	if err := a.follSessions.PropagateSessions(token, username, id, ttl); err != nil {
+		return "", err
+	}
+
+	if err := a.sessionHandler.AddToken(token, username, id, ttl); err != nil {
+		return "", err
 	}
 
 	return token, nil
@@ -160,6 +181,10 @@ func (a *authManager) LogOut(md *metadata.MD) error {
 		return err
 	}
 
+	if err := a.follSessions.DeleteSessions(token, username); err != nil {
+		return err
+	}
+
 	return a.sessionHandler.RemoveToken(token, username)
 }
 
@@ -175,7 +200,7 @@ func (a *authManager) DeleteUser(username string) error {
 		return ErrAtLeastOneAccount
 	}
 
-	if err := a.sessionHandler.DeleteTokenContaining(username); err != nil {
+	if err := a.sessionHandler.DeleteUser(username); err != nil {
 		return err
 	}
 

@@ -30,8 +30,8 @@ func (o *SessionMock) IsRefreshRequired(token, username string) (bool, error) {
 	return args.Bool(0), args.Error(1)
 }
 
-func (o *SessionMock) DeleteTokenContaining(token string) error {
-	args := o.Called(token)
+func (o *SessionMock) DeleteUser(username string) error {
+	args := o.Called(username)
 	return args.Error(0)
 }
 

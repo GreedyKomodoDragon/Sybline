@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option go_package = "./auth";
+
+package auth;
+
+service Session {
+    rpc PropagateSession(PropagateSessionRequest) returns (PropagateSessionResponse) {}
+    rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse) {}
+}
+
+message PropagateSessionRequest {
+  string token = 1;
+  string username = 2;
+  bytes consumerId = 3;
+  int64 timeToLive = 4;
+}
+
+message PropagateSessionResponse {
+    bool successful = 1;
+}  
+
+message DeleteSessionRequest {
+    string token = 1;
+    string username = 2;
+}
+  
+message DeleteSessionResponse {
+    bool successful = 1;
+} 

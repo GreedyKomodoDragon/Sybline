@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "./core";
+option go_package = "./handler";
 
 package MQ;
 
@@ -22,6 +22,7 @@ service MQEndpoints {
     rpc DeleteUser(UserInformation) returns (Status) {} 
     rpc BatchAck(BatchAckUpdate) returns (Status) {} 
     rpc BatchNack(BatchNackUpdate) returns (Status) {} 
+    rpc LogOut(LogOutRequest) returns (LogOutResponse) {}
 }
 
 message MessageInfo {
@@ -108,4 +109,12 @@ message BatchAckUpdate {
 message BatchNackUpdate {
     string queueName = 1;
     repeated bytes ids = 2;
+}
+
+message LogOutRequest {
+    
+}
+
+message LogOutResponse {
+    bool status = 1;
 }
