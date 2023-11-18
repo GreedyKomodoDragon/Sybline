@@ -45,6 +45,10 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/GreedyKomodoDragon/raft v0.2.0 h1:fvb/Qve5l4iXxNGC8kUSdu5Wx0FP3JyKRCtKDzomvkg=
 github.com/GreedyKomodoDragon/raft v0.2.0/go.mod h1:drWUjBBkyLeZRcSIEpOyxhE39PJGvJqpJg/36M8seTM=
+github.com/GreedyKomodoDragon/raft v0.2.1 h1:3twJGkpsJALurm4gK4iQbFw+cQnCk7pxY9XjO8dQv7I=
+github.com/GreedyKomodoDragon/raft v0.2.1/go.mod h1:drWUjBBkyLeZRcSIEpOyxhE39PJGvJqpJg/36M8seTM=
+github.com/GreedyKomodoDragon/raft v0.2.2 h1:SvlsZY04cY9yOD/hHVJwzaLvGl0jbz1sdHAEcuVAyho=
+github.com/GreedyKomodoDragon/raft v0.2.2/go.mod h1:drWUjBBkyLeZRcSIEpOyxhE39PJGvJqpJg/36M8seTM=
 github.com/GreedyKomodoDragon/sybline-go v0.2.0 h1:NKHWtJ6G0nEPTJzf9OAc44DSM+oXFnBzZyQ2phwUzHY=
 github.com/GreedyKomodoDragon/sybline-go v0.2.0/go.mod h1:ck0fQhVOuUNlXUGtAaTFMGzMMYgVejPyn2xzvICsqXc=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
