@@ -102,6 +102,9 @@ func (r *sessionHandler) AddToken(token string, username string, consumerID []by
 			id:    consumerID,
 			token: token,
 		})
+
+		r.sessionIDs[username] = mp
+		return nil
 	}
 
 	r.sessionIDs[username] = []timeSession{
