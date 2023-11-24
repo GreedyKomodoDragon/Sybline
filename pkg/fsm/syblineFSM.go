@@ -1,8 +1,6 @@
 package fsm
 
 import (
-	"fmt"
-	"os"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
 	"sybline/pkg/structs"
@@ -188,6 +186,6 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 		return nil, b.consumer.BatchNack(data.QueueName, data.Ids, data.ConsumerID)
 	}
 
-	_, _ = fmt.Fprintf(os.Stderr, "not raft log command type\n")
+	log.Error().Uint32("action", uint32(payload.Op)).Msg("not raft log command type")
 	return nil, nil
 }

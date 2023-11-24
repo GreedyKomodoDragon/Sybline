@@ -13,7 +13,6 @@ import (
 	"sybline/pkg/core"
 	"sybline/pkg/fsm"
 	"sybline/pkg/handler"
-	"sybline/pkg/messages"
 
 	"time"
 
@@ -58,10 +57,7 @@ const (
 	STREAM_BUILD_ATTEMPTS string = "STREAM_BUILD_ATTEMPTS"
 	APPEND_TIMEOUT        string = "APPEND_TIMEOUT"
 
-	REDIS_IP       string = "REDIS_IP"
 	TOKEN_DURATION string = "TOKEN_DURATION"
-	REDIS_DATABASE string = "REDIS_DATABASE"
-	REDIS_PASSWORD string = "REDIS_PASSWORD"
 
 	NODE_TTL string = "NODE_TTL"
 	SALT     string = "SALT"
@@ -75,10 +71,7 @@ var confKeys = []string{
 	SNAPSHOT_THRESHOLD,
 	ELECTION_TIMEOUT,
 	HEARTBEAT_TIMEOUT,
-	REDIS_IP,
 	TOKEN_DURATION,
-	REDIS_DATABASE,
-	REDIS_PASSWORD,
 	TLS_ENABLED,
 	SALT,
 }
@@ -127,11 +120,6 @@ func main() {
 		nodeTTL = 5 * 60
 	}
 
-	redisIP := v.GetString(REDIS_IP)
-	if redisIP == "" {
-		log.Fatal().Msg("REDIS_IP is required")
-	}
-
 	tokenDuration := v.GetInt64(TOKEN_DURATION)
 	if tokenDuration == 0 {
 		tokenDuration = 1800
@@ -167,13 +155,7 @@ func main() {
 	skipVerificationProm := v.GetBool(TLS_VERIFY_SKIP_PROM)
 	isTLSEnabledProm := v.GetBool(TLS_ENABLED_PROM)
 
-	redisPassword := v.GetString(REDIS_PASSWORD)
-	redisDatabase := v.GetInt(REDIS_DATABASE)
-
-	sessHandler, err := auth.NewRedisSession(redisIP, redisDatabase, redisPassword)
-	if err != nil {
-		log.Fatal().Msg("failed to start redis session: " + err.Error())
-	}
+	sessHandler := auth.NewSessionHandler()
 
 	port := v.GetInt(serverPort)
 	if port == 0 {
@@ -189,8 +171,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Msg("failed to listen: " + err.Error())
 	}
-
-	messages.Initialise()
 
 	srvMetrics := grpcprom.NewServerMetrics(
 		grpcprom.WithServerHandlingTimeHistogram(
@@ -272,10 +252,6 @@ func main() {
 	broker := core.NewBroker(queueMan)
 	consumer := core.NewConsumerManager(queueMan)
 
-	tDur := time.Second * time.Duration(tokenDuration)
-	authManger := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur)
-	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
-
 	electionTimeout := v.GetInt(ELECTION_TIMEOUT)
 	if electionTimeout == 0 {
 		electionTimeout = 2
@@ -289,16 +265,6 @@ func main() {
 	snapshotThreshold := v.GetUint64(SNAPSHOT_THRESHOLD)
 	if snapshotThreshold == 0 {
 		snapshotThreshold = 10000
-	}
-
-	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	logStore, err := raft.NewLogStore(snapshotThreshold)
-	if err != nil {
-		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
 
 	grpcServer := grpc.NewServer(opts...)
@@ -334,6 +300,26 @@ func main() {
 			Id:      id,
 			Opts:    clientOpts,
 		})
+	}
+
+	grpcServer.RegisterService(&auth.Session_ServiceDesc, auth.NewSessionServer(sessHandler))
+
+	tDur := time.Second * time.Duration(tokenDuration)
+	authManger, err := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur, servers)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+
+	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
+
+	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+
+	logStore, err := raft.NewLogStore(snapshotThreshold)
+	if err != nil {
+		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
 
 	raftServer := raft.NewRaftServer(fsmStore, logStore, grpcServer, &raft.Configuration{

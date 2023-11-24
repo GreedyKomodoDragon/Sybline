@@ -1,143 +1,128 @@
 package auth
 
 import (
-	"context"
 	"errors"
-	"fmt"
-	"strings"
+	"sync"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 var ErrNoUserSessionExists = errors.New("unable to find user")
+var ErrTokenDoesNotExist = errors.New("token does not exist")
 
 type SessionHandler interface {
 	GetConsumerID(token string, username string) ([]byte, error)
 	RemoveToken(token string, username string) error
-	AddToken(token string, username string, consumerID []byte, ttl time.Duration) error
-	DeleteTokenContaining(string) error
+	AddToken(token string, username string, consumerID []byte, ttl time.Time) error
+	DeleteUser(username string) error
 }
 
 type timeSession struct {
-	time time.Time
-	id   []byte
+	time  time.Time
+	id    []byte
+	token string
 }
 
-func NewRedisSession(host string, database int, password string) (SessionHandler, error) {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     host,
-		Password: password,
-		DB:       database,
-	})
-
-	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		return nil, err
+func NewSessionHandler() SessionHandler {
+	return &sessionHandler{
+		lock:       &sync.RWMutex{},
+		sessionIDs: map[string][]timeSession{},
 	}
-
-	return &redisSession{
-		redisClient: redisClient,
-		batchSize:   50,
-		sessionIDs:  map[string]timeSession{},
-	}, nil
 }
 
-type redisSession struct {
-	redisClient *redis.Client
-	sessionIDs  map[string]timeSession
-	batchSize   int64
+type sessionHandler struct {
+	lock       *sync.RWMutex
+	sessionIDs map[string][]timeSession
 }
 
-func (r *redisSession) GetConsumerID(token string, username string) ([]byte, error) {
-	ctx := context.Background()
+func remove(s []timeSession, i int) []timeSession {
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
+}
 
-	key := token + "_" + username
+func (r *sessionHandler) GetConsumerID(token string, username string) ([]byte, error) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
 
 	// use local session if possible
-	sess, ok := r.sessionIDs[key]
-	if ok {
-		if t := time.Now(); sess.time.Before(t) {
-			return sess.id, nil
-		}
-
-		delete(r.sessionIDs, key)
+	sess, ok := r.sessionIDs[username]
+	if !ok {
 		return nil, ErrNoUserSessionExists
 	}
 
-	cmd := r.redisClient.Get(ctx, key)
-	err := cmd.Err()
-	if err == redis.Nil {
-		return nil, ErrNoUserSessionExists
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	val, err := cmd.Result()
-	if err != nil {
-		return nil, err
-	}
-
-	return []byte(val), nil
-}
-
-func (r *redisSession) RemoveToken(token string, username string) error {
-	ctx := context.Background()
-	return r.redisClient.Del(ctx, token+"_"+username).Err()
-}
-
-func (r *redisSession) AddToken(token string, username string, consumerID []byte, ttl time.Duration) error {
-	ctx := context.Background()
-
-	key := token + "_" + username
-
-	r.sessionIDs[key] = timeSession{
-		time: time.Now(),
-		id:   consumerID,
-	}
-
-	cmd := r.redisClient.Set(ctx, token+"_"+username, consumerID, ttl)
-	return cmd.Err()
-}
-
-func (r *redisSession) DeleteTokenContaining(subString string) error {
-	ctx := context.Background()
-
-	// Get total keys count
-	totalKeys, err := r.redisClient.DBSize(ctx).Result()
-	if err != nil {
-		return err
-	}
-
-	// Calculate number of batches
-	numBatches := (totalKeys + r.batchSize - 1) / r.batchSize
-
-	for batch := int64(0); batch < numBatches; batch++ {
-		// Scan keys in the current batch
-		cursor := uint64(batch * r.batchSize)
-		keys, nextCursor, err := r.redisClient.Scan(ctx, cursor, fmt.Sprintf("*%s*", subString), r.batchSize).Result()
-		if err != nil {
-			return err
-		}
-
-		// Delete keys containing the substring in a pipeline
-		pipeline := r.redisClient.Pipeline()
-		for _, key := range keys {
-			if strings.Contains(key, subString) {
-				pipeline.Del(ctx, key)
+	for _, value := range sess {
+		if value.token == token {
+			if t := time.Now(); value.time.After(t) {
+				id := value.id
+				return id, nil
 			}
-		}
 
-		if _, err := pipeline.Exec(ctx); err != nil {
-			return err
-		}
+			// makes locking easier to manage if concurrent request
+			go r.RemoveToken(username, token)
 
-		// Break the loop if the cursor is 0, indicating the end of the iteration
-		if nextCursor == 0 {
-			break
+			return nil, ErrNoUserSessionExists
 		}
 	}
+
+	return nil, ErrNoUserSessionExists
+}
+
+func (r *sessionHandler) RemoveToken(token string, username string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	// use local session if possible
+	sess, ok := r.sessionIDs[username]
+	if !ok {
+		return ErrUserDoesNotExist
+	}
+
+	for index, value := range sess {
+		if value.token == token {
+
+			if len(sess) == 1 {
+				delete(r.sessionIDs, username)
+			} else {
+				sess = remove(sess, index)
+			}
+
+			return nil
+		}
+	}
+
+	return ErrTokenDoesNotExist
+}
+
+func (r *sessionHandler) AddToken(token string, username string, consumerID []byte, ttl time.Time) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if mp, ok := r.sessionIDs[username]; ok {
+		mp = append(mp, timeSession{
+			time:  ttl,
+			id:    consumerID,
+			token: token,
+		})
+
+		r.sessionIDs[username] = mp
+		return nil
+	}
+
+	r.sessionIDs[username] = []timeSession{
+		{
+			time:  ttl,
+			id:    consumerID,
+			token: token,
+		},
+	}
+
+	return nil
+}
+
+func (r *sessionHandler) DeleteUser(username string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	delete(r.sessionIDs, username)
 
 	return nil
 }

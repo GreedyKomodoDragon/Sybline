@@ -104,8 +104,6 @@ func (ll *LinkedList) Enqueue(id []byte, val []byte) {
 	ll.Tail.Next = newNode
 	ll.Tail = newNode
 	ll.Amount.Increment()
-
-	fmt.Println("here")
 }
 
 func (ll *LinkedList) BatchEnqueue(messages []MessageBatch) {
