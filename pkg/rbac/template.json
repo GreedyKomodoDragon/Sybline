@@ -1,0 +1,16 @@
+{
+    "version": "1",
+    "role": "<name>",
+    "actions": {
+        "GetMessages": "allow:queueOne,deny:queueTwo,deny:*",
+        "SubmitMessage": "allow:routeOne",
+        "SubmitBatchedMessages": "allow:routeOne",
+        "CreateQueue": "allow|deny",
+        "ChangePassword": "allow|deny",
+        "Ack": "allow:queueOne",
+        "BatchAck": "deny:queueOne",
+        "DeleteQueue": "allow|deny",
+        "CreateUser": "allow|deny",
+        "DeleteUser": "allow|deny"
+    }
+}
