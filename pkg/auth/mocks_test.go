@@ -20,14 +20,9 @@ func (o *SessionMock) RemoveToken(token string, username string) error {
 	return args.Error(0)
 }
 
-func (o *SessionMock) AddToken(token string, username string, consumerID []byte, ttl time.Duration) error {
+func (o *SessionMock) AddToken(token string, username string, consumerID []byte, ttl time.Time) error {
 	args := o.Called(token, username, consumerID, ttl)
 	return args.Error(0)
-}
-
-func (o *SessionMock) IsRefreshRequired(token, username string) (bool, error) {
-	args := o.Called(token, username)
-	return args.Bool(0), args.Error(1)
 }
 
 func (o *SessionMock) DeleteUser(username string) error {

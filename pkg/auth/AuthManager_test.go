@@ -1,186 +1,211 @@
 package auth_test
 
-// func TestAuthManager_CreateUser_Sync(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	idGenMock := &IdGenMock{}
-// 	mockSession := &SessionMock{}
+import (
+	"math/rand"
+	"sybline/pkg/auth"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+	"github.com/GreedyKomodoDragon/raft"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/metadata"
+)
 
-// 	err := a.CreateUser("username", "password")
-// 	assert.Nil(t, err, "should be able to create a new use")
+func TestAuthManager_CreateUser_Sync(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	idGenMock := &IdGenMock{}
+	mockSession := &SessionMock{}
 
-// 	err = a.CreateUser("username", "password")
-// 	assert.EqualError(t, err, auth.ErrUsernameAlreadyTaken.Error())
-// }
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// func TestAuthManager_CreateUser_Async(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	idGenMock := &IdGenMock{}
-// 	mockSession := &SessionMock{}
+	err = a.CreateUser("username", "password")
+	assert.Nil(t, err, "should be able to create a new use")
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+	err = a.CreateUser("username", "password")
+	assert.EqualError(t, err, auth.ErrUsernameAlreadyTaken.Error())
+}
 
-// 	var wg sync.WaitGroup
-// 	var n atomic.Uint32
+func TestAuthManager_CreateUser_Async(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	idGenMock := &IdGenMock{}
+	mockSession := &SessionMock{}
 
-// 	createUser := func(name string, password string) {
-// 		r := rand.Intn(50)
-// 		time.Sleep(time.Duration(r) * time.Microsecond)
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// 		if err := a.CreateUser(name, password); err != nil {
-// 			n.Add(1)
-// 		}
-// 		wg.Done()
-// 	}
+	var wg sync.WaitGroup
+	var n atomic.Uint32
 
-// 	wg.Add(3)
-// 	go createUser("username", "password")
-// 	go createUser("username", "password")
-// 	go createUser("username", "password")
+	createUser := func(name string, password string) {
+		r := rand.Intn(50)
+		time.Sleep(time.Duration(r) * time.Microsecond)
 
-// 	wg.Wait()
+		if err := a.CreateUser(name, password); err != nil {
+			n.Add(1)
+		}
+		wg.Done()
+	}
 
-// 	assert.Equal(t, uint32(2), n.Load(), "should have two errors")
-// }
+	wg.Add(3)
+	go createUser("username", "password")
+	go createUser("username", "password")
+	go createUser("username", "password")
 
-// func TestAuthManager_Login(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	tGenMock.On("Generate").Return("token")
+	wg.Wait()
 
-// 	idGenMock := &IdGenMock{}
-// 	idGenMock.On("Generate").Return([]byte("ab"))
+	assert.Equal(t, uint32(2), n.Load(), "should have two errors")
+}
 
-// 	mockSession := &SessionMock{}
-// 	mockSession.On("AddToken", "token", "username", []byte("ab"), time.Minute).Return(nil)
+func TestAuthManager_Login(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	tGenMock.On("Generate").Return("token")
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+	idGenMock := &IdGenMock{}
+	idGenMock.On("Generate").Return([]byte("ab"))
 
-// 	hashedPassword := auth.GenerateHash("password", "salt")
+	mockSession := &SessionMock{}
+	mockSession.On("AddToken", "token", "username", []byte("ab"), mock.Anything).Return(nil)
 
-// 	err := a.CreateUser("username", hashedPassword)
-// 	assert.Nil(t, err, "should be able to create a new use")
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// 	_, err = a.Login("username", hashedPassword)
-// 	assert.Nil(t, err, "should be able to login with correct details")
+	hashedPassword := auth.GenerateHash("password", "salt")
 
-// 	token, err := a.Login("username", "password1")
-// 	assert.EqualError(t, err, auth.ErrInvalidLogin.Error())
-// 	assert.Len(t, token, 0)
-// }
+	err = a.CreateUser("username", hashedPassword)
+	assert.Nil(t, err, "should be able to create a new use")
 
-// func TestAuthManager_IsLogin(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	tGenMock.On("Generate").Return("token")
+	_, err = a.Login("username", hashedPassword)
+	assert.Nil(t, err, "should be able to login with correct details")
 
-// 	idGenMock := &IdGenMock{}
-// 	idGenMock.On("Generate").Return([]byte("ab"))
+	token, err := a.Login("username", "password1")
+	assert.EqualError(t, err, auth.ErrInvalidLogin.Error())
+	assert.Len(t, token, 0)
+}
 
-// 	mockSession := &SessionMock{}
-// 	mockSession.On("AddToken", "token", "username", []byte("ab"), time.Minute).Return(nil)
-// 	mockSession.On("GetConsumerID", "token", "username").Return([]byte("a"), nil)
+func TestAuthManager_IsLogin(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	tGenMock.On("Generate").Return("token")
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+	idGenMock := &IdGenMock{}
+	idGenMock.On("Generate").Return([]byte("ab"))
 
-// 	hashedPassword := auth.GenerateHash("password", "salt")
+	mockSession := &SessionMock{}
+	mockSession.On("AddToken", "token", "username", []byte("ab"), mock.Anything).Return(nil)
+	mockSession.On("GetConsumerID", "token", "username").Return([]byte("a"), nil)
 
-// 	err := a.CreateUser("username", hashedPassword)
-// 	assert.Nil(t, err, "should be able to create a new use")
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// 	token, err := a.Login("username", hashedPassword)
-// 	assert.Nil(t, err, "should be able to login with correct details")
+	hashedPassword := auth.GenerateHash("password", "salt")
 
-// 	md := metadata.New(map[string]string{"syb-token": token, "username": "username"})
-// 	_, err = a.GetConsumerID(&md)
-// 	assert.Nil(t, err)
+	err = a.CreateUser("username", hashedPassword)
+	assert.Nil(t, err, "should be able to create a new use")
 
-// 	md = metadata.New(map[string]string{"syb-token": "token"})
-// 	_, err = a.GetConsumerID(&md)
-// 	assert.NotNil(t, err)
-// }
+	token, err := a.Login("username", hashedPassword)
+	assert.Nil(t, err, "should be able to login with correct details")
 
-// func TestAuthManager_Change_Password(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	tGenMock.On("Generate").Return("token")
+	md := metadata.New(map[string]string{"syb-token": token, "username": "username"})
+	_, err = a.GetConsumerID(&md)
+	assert.Nil(t, err)
 
-// 	idGenMock := &IdGenMock{}
-// 	idGenMock.On("Generate").Return([]byte("ab"))
+	md = metadata.New(map[string]string{"syb-token": "token"})
+	_, err = a.GetConsumerID(&md)
+	assert.NotNil(t, err)
+}
 
-// 	mockSession := &SessionMock{}
-// 	mockSession.On("AddToken", "token", "username", []byte("ab"), time.Minute).Return(nil)
+func TestAuthManager_Change_Password(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	tGenMock.On("Generate").Return("token")
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Minute)
+	idGenMock := &IdGenMock{}
+	idGenMock.On("Generate").Return([]byte("ab"))
 
-// 	err := a.CreateUser("username", "password")
-// 	assert.Nil(t, err, "should be able to create a new use")
+	mockSession := &SessionMock{}
+	mockSession.On("AddToken", "token", "username", []byte("ab"), mock.Anything).Return(nil)
 
-// 	_, err = a.Login("username", "password")
-// 	assert.Nil(t, err, "should be able to login with correct details")
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// 	status, err := a.ChangePassword("username", "password", "password1")
-// 	assert.Nil(t, err, "should be able to change a password")
-// 	assert.True(t, status, "should return true on changing password")
+	err = a.CreateUser("username", "password")
+	assert.Nil(t, err, "should be able to create a new use")
 
-// 	token, err := a.Login("username", "password")
-// 	assert.EqualError(t, err, auth.ErrInvalidLogin.Error())
-// 	assert.Equal(t, 0, len(token))
+	_, err = a.Login("username", "password")
+	assert.Nil(t, err, "should be able to login with correct details")
 
-// 	_, err = a.Login("username", "password1")
-// 	assert.Nil(t, err, "should be able to login with new correct details")
-// }
+	status, err := a.ChangePassword("username", "password", "password1")
+	assert.Nil(t, err, "should be able to change a password")
+	assert.True(t, status, "should return true on changing password")
 
-// func TestAuthManager_DeleteUser_User_Exists(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	idGenMock := &IdGenMock{}
-// 	mockSession := &SessionMock{}
-// 	mockSession.On("DeleteTokenContaining", "username").Return(nil)
-// 	mockSession.On("DeleteTokenContaining", "usernameOne").Return(nil)
+	token, err := a.Login("username", "password")
+	assert.EqualError(t, err, auth.ErrInvalidLogin.Error())
+	assert.Equal(t, 0, len(token))
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+	_, err = a.Login("username", "password1")
+	assert.Nil(t, err, "should be able to login with new correct details")
+}
 
-// 	err := a.CreateUser("username", "hashedPassword")
-// 	assert.Nil(t, err, "should be able to create a new use")
+func TestAuthManager_DeleteUser_User_Exists(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	idGenMock := &IdGenMock{}
+	mockSession := &SessionMock{}
+	mockSession.On("DeleteUser", "username").Return(nil)
+	mockSession.On("DeleteUser", "usernameOne").Return(nil)
 
-// 	err = a.CreateUser("usernameOne", "hashedPassword")
-// 	assert.Nil(t, err, "should be able to create a new use")
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// 	err = a.DeleteUser("usernameOne")
-// 	assert.Nil(t, err, "delete user should return no error")
+	err = a.CreateUser("username", "hashedPassword")
+	assert.Nil(t, err, "should be able to create a new use")
 
-// 	token, err := a.Login("usernameOne", "hashedPassword")
-// 	assert.Equal(t, 0, len(token))
-// 	assert.NotNil(t, err, "should not be able to log into deleted user")
-// }
+	err = a.CreateUser("usernameOne", "hashedPassword")
+	assert.Nil(t, err, "should be able to create a new use")
 
-// func TestAuthManager_DeleteUser_User_Does_Not_Exist(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	idGenMock := &IdGenMock{}
-// 	mockSession := &SessionMock{}
+	err = a.DeleteUser("usernameOne")
+	assert.Nil(t, err, "delete user should return no error")
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+	token, err := a.Login("usernameOne", "hashedPassword")
+	assert.Equal(t, 0, len(token))
+	assert.NotNil(t, err, "should not be able to log into deleted user")
+}
 
-// 	err := a.CreateUser("username", "hashedPassword")
-// 	assert.Nil(t, err, "should be able to create a new use")
+func TestAuthManager_DeleteUser_User_Does_Not_Exist(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	idGenMock := &IdGenMock{}
+	mockSession := &SessionMock{}
 
-// 	err = a.DeleteUser("usernameOne")
-// 	assert.NotNil(t, err, "delete user should return an error")
-// }
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// func TestAuthManager_DeleteUser_Cannot_Delete_All(t *testing.T) {
-// 	tGenMock := &TokenGenMock{}
-// 	idGenMock := &IdGenMock{}
+	err = a.CreateUser("username", "hashedPassword")
+	assert.Nil(t, err, "should be able to create a new use")
 
-// 	mockSession := &SessionMock{}
-// 	mockSession.On("DeleteTokenContaining", "username").Return(nil)
+	err = a.DeleteUser("usernameOne")
+	assert.NotNil(t, err, "delete user should return an error")
+}
 
-// 	a := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60)
+func TestAuthManager_DeleteUser_Cannot_Delete_All(t *testing.T) {
+	tGenMock := &TokenGenMock{}
+	idGenMock := &IdGenMock{}
 
-// 	err := a.CreateUser("username", "hashedPassword")
-// 	assert.Nil(t, err, "should be able to create a new use")
+	mockSession := &SessionMock{}
+	mockSession.On("DeleteUser", "usernametwo").Return(nil)
 
-// 	err = a.CreateUser("usernametwo", "hashedPassword")
-// 	assert.Nil(t, err, "should be able to create a new use")
+	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	assert.Nil(t, err, "should be able to create auth manager")
 
-// 	err = a.DeleteUser("username")
-// 	assert.Nil(t, err, "cannot delete last account")
-// }
+	err = a.CreateUser("username", "hashedPassword")
+	assert.Nil(t, err, "should be able to create a new use")
+
+	err = a.CreateUser("usernametwo", "hashedPassword")
+	assert.Nil(t, err, "should be able to create a new use")
+
+	err = a.DeleteUser("usernametwo")
+	assert.Nil(t, err, "can delete second to last user")
+
+	err = a.DeleteUser("username")
+	assert.ErrorIs(t, err, auth.ErrAtLeastOneAccount)
+}
