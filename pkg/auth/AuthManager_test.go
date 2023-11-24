@@ -10,16 +10,15 @@ import (
 
 	"github.com/GreedyKomodoDragon/raft"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/metadata"
 )
 
 func TestAuthManager_CreateUser_Sync(t *testing.T) {
 	tGenMock := &TokenGenMock{}
 	idGenMock := &IdGenMock{}
-	mockSession := &SessionMock{}
 
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "password")
@@ -32,9 +31,9 @@ func TestAuthManager_CreateUser_Sync(t *testing.T) {
 func TestAuthManager_CreateUser_Async(t *testing.T) {
 	tGenMock := &TokenGenMock{}
 	idGenMock := &IdGenMock{}
-	mockSession := &SessionMock{}
 
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	var wg sync.WaitGroup
@@ -67,10 +66,8 @@ func TestAuthManager_Login(t *testing.T) {
 	idGenMock := &IdGenMock{}
 	idGenMock.On("Generate").Return([]byte("ab"))
 
-	mockSession := &SessionMock{}
-	mockSession.On("AddToken", "token", "username", []byte("ab"), mock.Anything).Return(nil)
-
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	hashedPassword := auth.GenerateHash("password", "salt")
@@ -93,11 +90,8 @@ func TestAuthManager_IsLogin(t *testing.T) {
 	idGenMock := &IdGenMock{}
 	idGenMock.On("Generate").Return([]byte("ab"))
 
-	mockSession := &SessionMock{}
-	mockSession.On("AddToken", "token", "username", []byte("ab"), mock.Anything).Return(nil)
-	mockSession.On("GetConsumerID", "token", "username").Return([]byte("a"), nil)
-
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	hashedPassword := auth.GenerateHash("password", "salt")
@@ -124,10 +118,8 @@ func TestAuthManager_Change_Password(t *testing.T) {
 	idGenMock := &IdGenMock{}
 	idGenMock.On("Generate").Return([]byte("ab"))
 
-	mockSession := &SessionMock{}
-	mockSession.On("AddToken", "token", "username", []byte("ab"), mock.Anything).Return(nil)
-
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "password")
@@ -151,11 +143,9 @@ func TestAuthManager_Change_Password(t *testing.T) {
 func TestAuthManager_DeleteUser_User_Exists(t *testing.T) {
 	tGenMock := &TokenGenMock{}
 	idGenMock := &IdGenMock{}
-	mockSession := &SessionMock{}
-	mockSession.On("DeleteUser", "username").Return(nil)
-	mockSession.On("DeleteUser", "usernameOne").Return(nil)
 
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "hashedPassword")
@@ -175,9 +165,9 @@ func TestAuthManager_DeleteUser_User_Exists(t *testing.T) {
 func TestAuthManager_DeleteUser_User_Does_Not_Exist(t *testing.T) {
 	tGenMock := &TokenGenMock{}
 	idGenMock := &IdGenMock{}
-	mockSession := &SessionMock{}
 
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "hashedPassword")
@@ -191,10 +181,8 @@ func TestAuthManager_DeleteUser_Cannot_Delete_All(t *testing.T) {
 	tGenMock := &TokenGenMock{}
 	idGenMock := &IdGenMock{}
 
-	mockSession := &SessionMock{}
-	mockSession.On("DeleteUser", "usernametwo").Return(nil)
-
-	a, err := auth.NewAuthManager(mockSession, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	sessionHand := auth.NewSessionHandler()
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "hashedPassword")

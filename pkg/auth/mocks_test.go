@@ -1,34 +1,8 @@
 package auth_test
 
 import (
-	"time"
-
 	"github.com/stretchr/testify/mock"
 )
-
-type SessionMock struct {
-	mock.Mock
-}
-
-func (o *SessionMock) GetConsumerID(token string, username string) ([]byte, error) {
-	args := o.Called(token, username)
-	return args.Get(0).([]byte), args.Error(1)
-}
-
-func (o *SessionMock) RemoveToken(token string, username string) error {
-	args := o.Called(token, username)
-	return args.Error(0)
-}
-
-func (o *SessionMock) AddToken(token string, username string, consumerID []byte, ttl time.Time) error {
-	args := o.Called(token, username, consumerID, ttl)
-	return args.Error(0)
-}
-
-func (o *SessionMock) DeleteUser(username string) error {
-	args := o.Called(username)
-	return args.Error(0)
-}
 
 type TokenGenMock struct {
 	mock.Mock
