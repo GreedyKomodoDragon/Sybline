@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type FollowerSessions interface {
@@ -28,11 +30,12 @@ func (f *followerSessions) PropagateSessions(token string, username string, id [
 		TimeToLive: ttl.Unix(),
 	}
 
-	for _, client := range f.clients {
+	for index, client := range f.clients {
 		if _, err := client.PropagateSession(context.Background(), payload); err != nil {
-			return err
+			log.Err(err).Uint64("index", uint64(index)).Msg("failed to propagate the session to the follower")
 		}
 	}
+
 	return nil
 }
 
