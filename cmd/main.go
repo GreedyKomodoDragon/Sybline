@@ -13,6 +13,7 @@ import (
 	"sybline/pkg/core"
 	"sybline/pkg/fsm"
 	"sybline/pkg/handler"
+	"sybline/pkg/rbac"
 
 	"time"
 
@@ -311,6 +312,11 @@ func main() {
 	}
 
 	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
+
+	rbac := rbac.NewRoleManager()
+
+	// Gives sybline all the permissions
+	rbac.AssignRole("sybline", "ROOT")
 
 	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan)
 	if err != nil {

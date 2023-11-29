@@ -57,8 +57,40 @@ type RoleManager interface {
 }
 
 func NewRoleManager() RoleManager {
+	// admin role
+	role := Role{
+		Name: "ROOT",
+		GetMessages: map[string]bool{
+			"*": true,
+		},
+		SubmitMessage: map[string]bool{
+			"*": true,
+		},
+		SubmitBatchedMessages: map[string]bool{
+			"*": true,
+		},
+		Ack: map[string]bool{
+			"*": true,
+		},
+		BatchAck: map[string]bool{
+			"*": true,
+		},
+		AdminPermissions: []AdminPermission{
+			ALLOW_CREATE_QUEUE,
+			ALLOW_DELETE_QUEUE,
+			ALLOW_CREATE_USER,
+			ALLOW_DELETE_USER,
+			ALLOW_CREATE_ROLE,
+			ALLOW_DELETE_ROLE,
+			ALLOW_ASSIGN_ROLE,
+			ALLOW_UNASSIGN_ROLE,
+		},
+	}
+
 	return &roleManager{
-		roles: map[string]Role{},
+		roles: map[string]Role{
+			"ROOT": role,
+		},
 		users: map[string][]*Role{},
 	}
 }
@@ -233,6 +265,8 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 			} else {
 				role.AdminPermissions = append(role.AdminPermissions, DENY_UNASSIGN_ROLE)
 			}
+		default:
+			return fmt.Errorf("invalid field found: %s", perm)
 		}
 	}
 
@@ -359,13 +393,12 @@ func (r *roleManager) HasAdminPermission(username string, permission AdminPermis
 
 	for _, rol := range roles {
 		for _, permissions := range rol.AdminPermissions {
-			if permissions == permission {
-				foundAllow = true
-				continue
-			}
-
 			if permission == permissionDeny {
 				return false, nil
+			}
+
+			if permissions == permission {
+				foundAllow = true
 			}
 		}
 	}
@@ -381,27 +414,57 @@ func (r *roleManager) HasPermission(username string, entity string, permission A
 	for _, rol := range roles {
 		switch permission {
 		case GET_MESSAGES_ACTION:
-			if value, ok := rol.GetMessages[entity]; ok && value {
-				return true, nil
+			value, ok := rol.GetMessages["*"]
+			if ok {
+				return value, nil
+			}
+
+			value, ok = rol.GetMessages[entity]
+			if ok {
+				return value, nil
 			}
 
 		case ACK_ACTION:
-			if value, ok := rol.Ack[entity]; ok && value {
-				return true, nil
+			value, ok := rol.Ack["*"]
+			if ok {
+				return value, nil
+			}
+
+			value, ok = rol.Ack[entity]
+			if ok {
+				return value, nil
 			}
 		case BATCH_ACK_ACTION:
-			if value, ok := rol.BatchAck[entity]; ok && value {
-				return true, nil
+			value, ok := rol.BatchAck["*"]
+			if ok {
+				return value, nil
+			}
+
+			value, ok = rol.BatchAck[entity]
+			if ok {
+				return value, nil
 			}
 
 		case SUBMIT_MESSAGE_ACTION:
-			if value, ok := rol.SubmitMessage[entity]; ok && value {
-				return true, nil
+			value, ok := rol.SubmitMessage["*"]
+			if ok {
+				return value, nil
+			}
+
+			value, ok = rol.SubmitMessage[entity]
+			if ok {
+				return value, nil
 			}
 
 		case SUBMIT_BATCH_ACTION:
-			if value, ok := rol.SubmitBatchedMessages[entity]; ok && value {
-				return true, nil
+			value, ok := rol.SubmitBatchedMessages["*"]
+			if ok {
+				return value, nil
+			}
+
+			value, ok = rol.SubmitBatchedMessages[entity]
+			if ok {
+				return value, nil
 			}
 		}
 
