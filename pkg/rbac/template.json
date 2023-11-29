@@ -11,6 +11,10 @@
         "BatchAck": "deny:queueOne",
         "DeleteQueue": "allow|deny",
         "CreateUser": "allow|deny",
-        "DeleteUser": "allow|deny"
+        "DeleteUser": "allow|deny",
+        "CreateRole": "allow|deny",
+        "DeleteRole": "allow|deny",
+        "AssignRole": "allow|deny",
+        "UnAssignRole": "allow|deny"
     }
 }
