@@ -49,6 +49,7 @@ type Role struct {
 
 type RoleManager interface {
 	CreateRole(jsonRole string) error
+	AddRole(role Role) error
 	DeleteRole(role string) error
 	AssignRole(name, role string) error
 	UnassignRole(name, role string) error
@@ -58,41 +59,14 @@ type RoleManager interface {
 
 func NewRoleManager() RoleManager {
 	// admin role
-	role := Role{
-		Name: "ROOT",
-		GetMessages: map[string]bool{
-			"*": true,
-		},
-		SubmitMessage: map[string]bool{
-			"*": true,
-		},
-		SubmitBatchedMessages: map[string]bool{
-			"*": true,
-		},
-		Ack: map[string]bool{
-			"*": true,
-		},
-		BatchAck: map[string]bool{
-			"*": true,
-		},
-		AdminPermissions: []AdminPermission{
-			ALLOW_CREATE_QUEUE,
-			ALLOW_DELETE_QUEUE,
-			ALLOW_CREATE_USER,
-			ALLOW_DELETE_USER,
-			ALLOW_CREATE_ROLE,
-			ALLOW_DELETE_ROLE,
-			ALLOW_ASSIGN_ROLE,
-			ALLOW_UNASSIGN_ROLE,
-		},
-	}
-
-	return &roleManager{
-		roles: map[string]Role{
-			"ROOT": role,
-		},
+	manager := &roleManager{
+		roles: map[string]Role{},
 		users: map[string][]*Role{},
 	}
+
+	createBuiltInRoles(manager)
+
+	return manager
 }
 
 type roleManager struct {
@@ -275,6 +249,16 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 	return nil
 }
 
+func (r *roleManager) AddRole(role Role) error {
+	_, ok := r.roles[role.Name]
+	if ok {
+		return fmt.Errorf("role name already exists")
+	}
+
+	r.roles[role.Name] = role
+	return nil
+}
+
 func parseAdminPermissions(permString string) (bool, error) {
 	if permString == "allow" {
 		return true, nil
@@ -345,7 +329,7 @@ func (r *roleManager) AssignRole(username, roleName string) error {
 		}
 	}
 
-	roles, ok := r.users[username]
+	_, ok = r.users[username]
 	if !ok {
 		r.users[username] = []*Role{
 			&role,
@@ -354,7 +338,7 @@ func (r *roleManager) AssignRole(username, roleName string) error {
 		return nil
 	}
 
-	roles = append(roles, &role)
+	r.users[username] = append(r.users[username], &role)
 
 	return nil
 }
@@ -393,7 +377,8 @@ func (r *roleManager) HasAdminPermission(username string, permission AdminPermis
 
 	for _, rol := range roles {
 		for _, permissions := range rol.AdminPermissions {
-			if permission == permissionDeny {
+			if permissions == permissionDeny {
+				fmt.Println("permission deny")
 				return false, nil
 			}
 
@@ -411,65 +396,119 @@ func (r *roleManager) HasPermission(username string, entity string, permission A
 		return false, fmt.Errorf("user with name '%s' does not exist or have any roles", username)
 	}
 
+	hasPerm := false
+
 	for _, rol := range roles {
 		switch permission {
 		case GET_MESSAGES_ACTION:
 			value, ok := rol.GetMessages["*"]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 			value, ok = rol.GetMessages[entity]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 		case ACK_ACTION:
 			value, ok := rol.Ack["*"]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 			value, ok = rol.Ack[entity]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 		case BATCH_ACK_ACTION:
 			value, ok := rol.BatchAck["*"]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 			value, ok = rol.BatchAck[entity]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 		case SUBMIT_MESSAGE_ACTION:
 			value, ok := rol.SubmitMessage["*"]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					fmt.Println("found in here")
+					continue
+				}
+
+				fmt.Println("found in here two")
+				return false, nil
 			}
 
 			value, ok = rol.SubmitMessage[entity]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 		case SUBMIT_BATCH_ACTION:
 			value, ok := rol.SubmitBatchedMessages["*"]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 
 			value, ok = rol.SubmitBatchedMessages[entity]
 			if ok {
-				return value, nil
+				if value {
+					hasPerm = true
+					continue
+				}
+
+				return false, nil
 			}
 		}
 
 	}
-	return false, nil
+	return hasPerm, nil
 }
 
 func remove(s []*Role, i int) []*Role {
