@@ -3,9 +3,11 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
 	"sybline/pkg/fsm"
+	"sybline/pkg/rbac"
 	"sybline/pkg/structs"
 
 	"time"
@@ -25,9 +27,14 @@ var (
 	ErrRaftNotIntialised  = errors.New("raft server not running")
 	ErrResponseCastFailed = errors.New("unable to cast response to the expected type")
 	ErrMetaDataNotFound   = errors.New("unable to get authenication metadata")
+
+	falseStatus = &Status{
+		Status: false,
+	}
 )
 
 type mQEndpointsServer struct {
+	rbacManager    rbac.RoleManager
 	authManager    auth.AuthManager
 	raftServer     raft.Raft
 	salt           string
@@ -36,8 +43,9 @@ type mQEndpointsServer struct {
 	UnimplementedMQEndpointsServer
 }
 
-func NewServer(authManager auth.AuthManager, raftServer raft.Raft, salt string) MQEndpointsServer {
+func NewServer(rbacManager rbac.RoleManager, authManager auth.AuthManager, raftServer raft.Raft, salt string) MQEndpointsServer {
 	return mQEndpointsServer{
+		rbacManager: rbacManager,
 		authManager: authManager,
 		raftServer:  raftServer,
 		salt:        salt,
@@ -52,27 +60,37 @@ func NewServer(authManager auth.AuthManager, raftServer raft.Raft, salt string) 
 
 func (s mQEndpointsServer) SubmitMessage(ctx context.Context, info *MessageInfo) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateMessage(info.Data, info.RoutingKey); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
-	_, err := s.authManager.GetConsumerID(&md)
+	if _, err := s.authManager.GetConsumerID(&md); err != nil {
+		return falseStatus, ErrNoAuthToken
+	}
+
+	userSlice := md.Get("username")
+	if len(userSlice) == 0 {
+		return falseStatus, fmt.Errorf("missing username")
+	}
+
+	ok, err := s.rbacManager.HasPermission(userSlice[0], info.RoutingKey, rbac.SUBMIT_MESSAGE_ACTION)
 	if err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
 	}
 
 	id := uuid.New()
-
 	_, err = s.sendCommand(fsm.SUBMIT_MESSAGE, structs.MessageInfo{
 		Rk:   info.RoutingKey,
 		Data: info.Data,
@@ -90,17 +108,17 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *RequestMess
 	}
 
 	if err := validateRequestMessages(request.QueueName, request.Amount); err != nil {
-		return nil, err
+		return &MessageCollection{}, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return &MessageCollection{}, ErrMetaDataNotFound
 	}
 
 	consumerID, err := s.authManager.GetConsumerID(&md)
 	if err != nil {
-		return nil, ErrNoAuthToken
+		return &MessageCollection{}, ErrNoAuthToken
 	}
 
 	msg := s.getObjectPool.GetObject()
@@ -113,7 +131,7 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *RequestMess
 
 	s.getObjectPool.ReleaseObject(msg)
 	if err != nil {
-		return nil, err
+		return &MessageCollection{}, err
 	}
 
 	msgs, _ := res.([]core.Message)
@@ -133,26 +151,39 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *RequestMess
 
 func (s mQEndpointsServer) CreateQueue(ctx context.Context, request *QueueInfo) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateCreateQueue(request.RoutingKey, request.Name, request.Size); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
 		log.Err(err).Msg("unable to get consumer id")
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.CREATE_QUEUE, structs.QueueInfo{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get consumer username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_CREATE_QUEUE)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.CREATE_QUEUE, structs.QueueInfo{
 		RoutingKey: request.RoutingKey,
 		Name:       request.Name,
 		Size:       request.Size,
@@ -167,27 +198,25 @@ func (s mQEndpointsServer) CreateQueue(ctx context.Context, request *QueueInfo) 
 
 func (s mQEndpointsServer) Ack(ctx context.Context, request *AckUpdate) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateAck(request.QueueName, request.Id); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	if _, err := uuid.FromBytes(request.Id); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	consumerID, err := s.authManager.GetConsumerID(&md)
 	if err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err = s.sendCommand(fsm.ACK, structs.AckUpdate{
@@ -203,17 +232,17 @@ func (s mQEndpointsServer) Ack(ctx context.Context, request *AckUpdate) (*Status
 
 func (s mQEndpointsServer) Login(ctx context.Context, request *Credentials) (*Status, error) {
 	if len(request.Username) == 0 {
-		return nil, ErrInvalidUsername
+		return falseStatus, ErrInvalidUsername
 	}
 
 	if len(request.Password) == 0 {
-		return nil, ErrInvalidPassword
+		return falseStatus, ErrInvalidPassword
 	}
 
 	token, err := s.authManager.Login(request.Username, auth.GenerateHash(request.Password, s.salt))
 	if err != nil {
 		log.Err(err).Msg("unable to log in")
-		return nil, err
+		return falseStatus, err
 	}
 
 	// Anything linked to this variable will transmit response headers.
@@ -223,7 +252,7 @@ func (s mQEndpointsServer) Login(ctx context.Context, request *Credentials) (*St
 	})
 
 	if err := grpc.SendHeader(ctx, header); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	return &Status{
@@ -233,22 +262,20 @@ func (s mQEndpointsServer) Login(ctx context.Context, request *Credentials) (*St
 
 func (s mQEndpointsServer) ChangePassword(ctx context.Context, request *ChangeCredentials) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateChangePassword(request.Username, request.OldPassword, request.NewPassword); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.CHANGE_PASSWORD, structs.ChangeCredentials{
@@ -264,27 +291,25 @@ func (s mQEndpointsServer) ChangePassword(ctx context.Context, request *ChangeCr
 
 func (s mQEndpointsServer) Nack(ctx context.Context, request *AckUpdate) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateAck(request.QueueName, request.Id); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	if _, err := uuid.FromBytes(request.Id); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	consumerID, err := s.authManager.GetConsumerID(&md)
 	if err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err = s.sendCommand(fsm.NACK, structs.AckUpdate{
@@ -300,22 +325,20 @@ func (s mQEndpointsServer) Nack(ctx context.Context, request *AckUpdate) (*Statu
 
 func (s mQEndpointsServer) DeleteQueue(ctx context.Context, request *DeleteQueueInfo) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if len(request.QueueName) == 0 {
-		return nil, ErrInvalidQueueName
+		return falseStatus, ErrInvalidQueueName
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.DELETE_QUEUE, structs.DeleteQueueInfo{
@@ -329,22 +352,20 @@ func (s mQEndpointsServer) DeleteQueue(ctx context.Context, request *DeleteQueue
 
 func (s mQEndpointsServer) AddRoutingKey(ctx context.Context, in *AddRoute) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateRoutingKeyChange(in.QueueName, in.RouteName); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.ADD_ROUTING_KEY, structs.AddRoute{
@@ -359,22 +380,20 @@ func (s mQEndpointsServer) AddRoutingKey(ctx context.Context, in *AddRoute) (*St
 
 func (s mQEndpointsServer) DeleteRoutingKey(ctx context.Context, in *DeleteRoute) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateRoutingKeyChange(in.QueueName, in.RouteName); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.DELETE_ROUTING_KEY, structs.DeleteRoute{
@@ -389,22 +408,20 @@ func (s mQEndpointsServer) DeleteRoutingKey(ctx context.Context, in *DeleteRoute
 
 func (s mQEndpointsServer) CreateUser(ctx context.Context, in *UserCreds) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateUsernamePassword(in.Username, in.Password); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.CREATE_ACCOUNT, structs.UserCreds{
@@ -424,20 +441,18 @@ type prebatch struct {
 
 func (s mQEndpointsServer) SubmitBatchedMessages(ctx context.Context, in *BatchMessages) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	routes := make(map[string]*prebatch)
 	for _, msg := range in.Messages {
 		if err := validateMessage(msg.Data, msg.RoutingKey); err != nil {
-			return nil, err
+			return falseStatus, err
 		}
 
 		id := uuid.New()
@@ -466,7 +481,7 @@ func (s mQEndpointsServer) SubmitBatchedMessages(ctx context.Context, in *BatchM
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.SUBMIT_BATCH_MESSAGE, structs.BatchMessages{
@@ -480,7 +495,7 @@ func (s mQEndpointsServer) SubmitBatchedMessages(ctx context.Context, in *BatchM
 
 func (s mQEndpointsServer) IsLeaderNode(ctx context.Context, msg *LeaderNodeRequest) (*Status, error) {
 	if s.raftServer == nil {
-		return nil, ErrRaftNotIntialised
+		return falseStatus, ErrRaftNotIntialised
 	}
 
 	return &Status{
@@ -490,22 +505,20 @@ func (s mQEndpointsServer) IsLeaderNode(ctx context.Context, msg *LeaderNodeRequ
 
 func (s mQEndpointsServer) DeleteUser(ctx context.Context, msg *UserInformation) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if len(msg.Username) == 0 {
-		return nil, ErrInvalidUsername
+		return falseStatus, ErrInvalidUsername
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	if _, err := s.authManager.GetConsumerID(&md); err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err := s.sendCommand(fsm.DELETE_USER, structs.UserInformation{
@@ -519,23 +532,21 @@ func (s mQEndpointsServer) DeleteUser(ctx context.Context, msg *UserInformation)
 
 func (s mQEndpointsServer) BatchAck(ctx context.Context, msg *BatchAckUpdate) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateBatchAck(msg.QueueName, msg.Id); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	cnId, err := s.authManager.GetConsumerID(&md)
 	if err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err = s.sendCommand(fsm.BATCH_ACK, structs.BatchAckUpdate{
@@ -551,23 +562,21 @@ func (s mQEndpointsServer) BatchAck(ctx context.Context, msg *BatchAckUpdate) (*
 
 func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *BatchNackUpdate) (*Status, error) {
 	if s.raftServer.State() != raft.LEADER {
-		return &Status{
-			Status: false,
-		}, ErrNotLeader
+		return falseStatus, ErrNotLeader
 	}
 
 	if err := validateBatchAck(msg.QueueName, msg.Ids); err != nil {
-		return nil, err
+		return falseStatus, err
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return falseStatus, ErrMetaDataNotFound
 	}
 
 	cnId, err := s.authManager.GetConsumerID(&md)
 	if err != nil {
-		return nil, ErrNoAuthToken
+		return falseStatus, ErrNoAuthToken
 	}
 
 	_, err = s.sendCommand(fsm.BATCH_ACK, structs.BatchNackUpdate{
@@ -584,7 +593,9 @@ func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *BatchNackUpdate) 
 func (s mQEndpointsServer) LogOut(ctx context.Context, req *LogOutRequest) (*LogOutResponse, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrMetaDataNotFound
+		return &LogOutResponse{
+			Status: false,
+		}, ErrMetaDataNotFound
 	}
 
 	err := s.authManager.LogOut(&md)

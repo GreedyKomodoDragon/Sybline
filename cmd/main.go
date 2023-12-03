@@ -313,10 +313,10 @@ func main() {
 
 	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
 
-	rbac := rbac.NewRoleManager()
+	rbacManager := rbac.NewRoleManager()
 
 	// Gives sybline all the permissions
-	rbac.AssignRole("sybline", "ROOT")
+	rbacManager.AssignRole("sybline", "ROOT")
 
 	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan)
 	if err != nil {
@@ -347,6 +347,6 @@ func main() {
 	raftServer.Start()
 
 	log.Info().Int("port", port).Msg("listening on port")
-	grpcServer.RegisterService(&handler.MQEndpoints_ServiceDesc, handler.NewServer(authManger, raftServer, salt))
+	grpcServer.RegisterService(&handler.MQEndpoints_ServiceDesc, handler.NewServer(rbacManager, authManger, raftServer, salt))
 	grpcServer.Serve(lis)
 }
