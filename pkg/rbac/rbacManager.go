@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type AdminPermission uint32
@@ -25,6 +26,12 @@ const (
 	DENY_ASSIGN_ROLE
 	ALLOW_UNASSIGN_ROLE
 	DENY_UNASSIGN_ROLE
+	ALLOW_CHANGE_PASSWORD
+	DENY_CHANGE_PASSWORD
+	ALLOW_ADD_ROUTING_KEY
+	DENY_ADD_ROUTING_KEY
+	ALLOW_DELETE_ROUTING_KEY
+	DENY_DELETE_ROUTING_KEY
 )
 
 type Action uint32
@@ -48,7 +55,7 @@ type Role struct {
 }
 
 type RoleManager interface {
-	CreateRole(jsonRole string) error
+	CreateRole(jsonRole string) (*Role, error)
 	AddRole(role Role) error
 	DeleteRole(role string) error
 	AssignRole(name, role string) error
@@ -62,6 +69,7 @@ func NewRoleManager() RoleManager {
 	manager := &roleManager{
 		roles: map[string]Role{},
 		users: map[string][]*Role{},
+		lock:  &sync.RWMutex{},
 	}
 
 	createBuiltInRoles(manager)
@@ -72,29 +80,32 @@ func NewRoleManager() RoleManager {
 type roleManager struct {
 	roles map[string]Role
 	users map[string][]*Role
+	lock  *sync.RWMutex
 }
 
-func (r *roleManager) CreateRole(jsonRole string) error {
+func (r *roleManager) CreateRole(jsonRole string) (*Role, error) {
 	var roleData map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonRole), &roleData); err != nil {
-		return err
+		return nil, err
 	}
 
 	roleName, ok := roleData["role"]
 	if !ok {
-		return fmt.Errorf("missing role name")
+		return nil, fmt.Errorf("missing role name")
 	}
 
 	nameStr, ok := roleName.(string)
 	if !ok || len(nameStr) == 0 {
-		return fmt.Errorf("role name must have length >1")
+		return nil, fmt.Errorf("role name must have length >1")
 	}
 
+	r.lock.RLock()
+	defer r.lock.RUnlock()
 	if _, ok := r.roles[nameStr]; ok {
-		return fmt.Errorf("role '%s' already exists", nameStr)
+		return nil, fmt.Errorf("role '%s' already exists", nameStr)
 	}
 
-	role := Role{
+	role := &Role{
 		Name:                  nameStr,
 		GetMessages:           make(map[string]bool),
 		SubmitMessage:         make(map[string]bool),
@@ -106,46 +117,46 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 
 	act, ok := roleData["actions"]
 	if !ok {
-		return fmt.Errorf("missing actions")
+		return nil, fmt.Errorf("missing actions")
 	}
 
 	actions, ok := act.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("invalid actions")
+		return nil, fmt.Errorf("invalid actions")
 	}
 
 	for action, permissions := range actions {
 		perm, ok := permissions.(string)
 		if !ok {
-			return fmt.Errorf("invalid permission")
+			return nil, fmt.Errorf("invalid permission")
 		}
 
 		switch action {
 		case "GetMessages":
 			mp, err := parsePermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			role.GetMessages = mp
 		case "SubmitMessage":
 			mp, err := parsePermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			role.SubmitMessage = mp
 		case "SubmitBatchedMessages":
 			mp, err := parsePermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			role.SubmitBatchedMessages = mp
 		case "BatchAck":
 			mp, err := parsePermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			role.BatchAck = mp
@@ -153,7 +164,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "CreateQueue":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -165,7 +176,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "DeleteQueue":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -176,7 +187,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "CreateUser":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -187,7 +198,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "DeleteUser":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -198,7 +209,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "CreateRole":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -209,7 +220,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "DeleteRole":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -220,7 +231,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "AssignRole":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -231,7 +242,7 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 		case "UnAssignRole":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if result {
@@ -239,17 +250,50 @@ func (r *roleManager) CreateRole(jsonRole string) error {
 			} else {
 				role.AdminPermissions = append(role.AdminPermissions, DENY_UNASSIGN_ROLE)
 			}
+		case "ChangePassword":
+			result, err := parseAdminPermissions(perm)
+			if err != nil {
+				return nil, err
+			}
+
+			if result {
+				role.AdminPermissions = append(role.AdminPermissions, ALLOW_CHANGE_PASSWORD)
+			} else {
+				role.AdminPermissions = append(role.AdminPermissions, DENY_CHANGE_PASSWORD)
+			}
+		case "AddRoutingKey":
+			result, err := parseAdminPermissions(perm)
+			if err != nil {
+				return nil, err
+			}
+
+			if result {
+				role.AdminPermissions = append(role.AdminPermissions, ALLOW_ADD_ROUTING_KEY)
+			} else {
+				role.AdminPermissions = append(role.AdminPermissions, DENY_ADD_ROUTING_KEY)
+			}
+		case "DeleteRoutingKey":
+			result, err := parseAdminPermissions(perm)
+			if err != nil {
+				return nil, err
+			}
+
+			if result {
+				role.AdminPermissions = append(role.AdminPermissions, ALLOW_DELETE_ROUTING_KEY)
+			} else {
+				role.AdminPermissions = append(role.AdminPermissions, DENY_DELETE_ROUTING_KEY)
+			}
 		default:
-			return fmt.Errorf("invalid field found: %s", perm)
+			return nil, fmt.Errorf("invalid field found: %s", perm)
 		}
 	}
 
-	r.roles[nameStr] = role
-
-	return nil
+	return role, nil
 }
 
 func (r *roleManager) AddRole(role Role) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	_, ok := r.roles[role.Name]
 	if ok {
 		return fmt.Errorf("role name already exists")
@@ -301,6 +345,9 @@ func parsePermissions(permString string) (map[string]bool, error) {
 }
 
 func (r *roleManager) DeleteRole(role string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	if _, ok := r.roles[role]; !ok {
 		return &RoleDoesNotExistError{
 			Name: role,
@@ -322,6 +369,9 @@ func (r *roleManager) DeleteRole(role string) error {
 }
 
 func (r *roleManager) AssignRole(username, roleName string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	role, ok := r.roles[roleName]
 	if !ok {
 		return &RoleDoesNotExistError{
@@ -344,6 +394,9 @@ func (r *roleManager) AssignRole(username, roleName string) error {
 }
 
 func (r *roleManager) UnassignRole(username, roleName string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	_, ok := r.roles[roleName]
 	if !ok {
 		return &RoleDoesNotExistError{
@@ -366,6 +419,9 @@ func (r *roleManager) UnassignRole(username, roleName string) error {
 	return fmt.Errorf("user with name '%s' does not have role '%s' to be unassigned", username, roleName)
 }
 func (r *roleManager) HasAdminPermission(username string, permission AdminPermission) (bool, error) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
 	roles, ok := r.users[username]
 	if !ok {
 		return false, fmt.Errorf("user with name '%s' does not exist or have any roles", username)
@@ -378,7 +434,6 @@ func (r *roleManager) HasAdminPermission(username string, permission AdminPermis
 	for _, rol := range roles {
 		for _, permissions := range rol.AdminPermissions {
 			if permissions == permissionDeny {
-				fmt.Println("permission deny")
 				return false, nil
 			}
 
@@ -391,6 +446,9 @@ func (r *roleManager) HasAdminPermission(username string, permission AdminPermis
 	return foundAllow, nil
 }
 func (r *roleManager) HasPermission(username string, entity string, permission Action) (bool, error) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
 	roles, ok := r.users[username]
 	if !ok {
 		return false, fmt.Errorf("user with name '%s' does not exist or have any roles", username)

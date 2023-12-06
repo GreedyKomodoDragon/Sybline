@@ -318,7 +318,7 @@ func main() {
 	// Gives sybline all the permissions
 	rbacManager.AssignRole("sybline", "ROOT")
 
-	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan)
+	fsmStore, err := fsm.NewSyblineFSM(broker, consumer, authManger, queueMan, rbacManager)
 	if err != nil {
 		log.Fatal().Err(err)
 	}

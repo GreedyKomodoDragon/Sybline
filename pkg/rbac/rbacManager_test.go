@@ -11,7 +11,7 @@ import (
 func TestCreateRole_Success(t *testing.T) {
 	jsonRole := `{"role": "TestRole", "actions": {"GetMessages": "allow:entity1,deny:entity2"}}`
 	rm := rbac.NewRoleManager()
-	err := rm.CreateRole(jsonRole)
+	_, err := rm.CreateRole(jsonRole)
 
 	require.NoError(t, err)
 }
@@ -19,7 +19,7 @@ func TestCreateRole_Success(t *testing.T) {
 func TestCreateRole_Success_Admin_Permission(t *testing.T) {
 	jsonRole := `{"role": "TestRole", "actions": {"GetMessages": "allow:entity1,deny:entity2", "CreateUser": "deny"}}`
 	rm := rbac.NewRoleManager()
-	err := rm.CreateRole(jsonRole)
+	_, err := rm.CreateRole(jsonRole)
 
 	assert.NoError(t, err)
 }
@@ -27,7 +27,7 @@ func TestCreateRole_Success_Admin_Permission(t *testing.T) {
 func TestCreateRole_InvalidInput_No_Name(t *testing.T) {
 	invalidJSONRole := `{"invalid_field": "TestRole", "actions": {"GetMessages": "allow:entity1,deny:entity2"}}`
 	rm := rbac.NewRoleManager()
-	err := rm.CreateRole(invalidJSONRole)
+	_, err := rm.CreateRole(invalidJSONRole)
 
 	require.Error(t, err)
 }
@@ -91,6 +91,18 @@ func Test_Builtin_Root_Can_Do_All(t *testing.T) {
 	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_USER)
 	require.NoError(t, err)
 	require.True(t, ok, "should be true")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_ADD_ROUTING_KEY)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_ROUTING_KEY)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_CHANGE_PASSWORD)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
 }
 
 func Test_Builtin_Admin(t *testing.T) {
@@ -152,6 +164,18 @@ func Test_Builtin_Admin(t *testing.T) {
 	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_USER)
 	require.NoError(t, err)
 	require.True(t, ok, "should be true")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_ADD_ROUTING_KEY)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_ROUTING_KEY)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_CHANGE_PASSWORD)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
 }
 
 func Test_Builtin_Consumer(t *testing.T) {
@@ -211,6 +235,18 @@ func Test_Builtin_Consumer(t *testing.T) {
 	require.False(t, ok, "should be false")
 
 	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_USER)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_ADD_ROUTING_KEY)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_ROUTING_KEY)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_CHANGE_PASSWORD)
 	require.NoError(t, err)
 	require.False(t, ok, "should be false")
 }
@@ -275,6 +311,18 @@ func Test_Builtin_DENY_All(t *testing.T) {
 	require.False(t, ok, "should be false")
 
 	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_USER)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_ADD_ROUTING_KEY)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_DELETE_ROUTING_KEY)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	ok, err = rm.HasAdminPermission("sybline", rbac.ALLOW_CHANGE_PASSWORD)
 	require.NoError(t, err)
 	require.False(t, ok, "should be false")
 }

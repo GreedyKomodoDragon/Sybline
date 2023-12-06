@@ -76,12 +76,13 @@ func (s mQEndpointsServer) SubmitMessage(ctx context.Context, info *MessageInfo)
 		return falseStatus, ErrNoAuthToken
 	}
 
-	userSlice := md.Get("username")
-	if len(userSlice) == 0 {
-		return falseStatus, fmt.Errorf("missing username")
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
 	}
 
-	ok, err := s.rbacManager.HasPermission(userSlice[0], info.RoutingKey, rbac.SUBMIT_MESSAGE_ACTION)
+	ok, err = s.rbacManager.HasPermission(username, info.RoutingKey, rbac.SUBMIT_MESSAGE_ACTION)
 	if err != nil {
 		return falseStatus, err
 	}
@@ -95,7 +96,7 @@ func (s mQEndpointsServer) SubmitMessage(ctx context.Context, info *MessageInfo)
 		Rk:   info.RoutingKey,
 		Data: info.Data,
 		Id:   id[:],
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -121,13 +122,28 @@ func (s mQEndpointsServer) GetMessages(ctx context.Context, request *RequestMess
 		return &MessageCollection{}, ErrNoAuthToken
 	}
 
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return &MessageCollection{}, err
+	}
+
+	ok, err = s.rbacManager.HasPermission(username, request.QueueName, rbac.GET_MESSAGES_ACTION)
+	if err != nil {
+		return &MessageCollection{}, err
+	}
+
+	if !ok {
+		return &MessageCollection{}, fmt.Errorf("does not have permission to perform action")
+	}
+
 	msg := s.getObjectPool.GetObject()
 	msg.QueueName = request.QueueName
 	msg.Amount = request.Amount
 	msg.ConsumerID = consumerID
 	msg.Time = time.Now().Unix()
 
-	res, err := s.sendCommand(fsm.GET_MESSAGES, msg)
+	res, err := s.sendCommand(fsm.GET_MESSAGES, msg, username)
 
 	s.getObjectPool.ReleaseObject(msg)
 	if err != nil {
@@ -189,7 +205,7 @@ func (s mQEndpointsServer) CreateQueue(ctx context.Context, request *QueueInfo) 
 		Size:       request.Size,
 		RetryLimit: request.RetryLimit,
 		HasDLQueue: request.HasDLQueue,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -219,11 +235,26 @@ func (s mQEndpointsServer) Ack(ctx context.Context, request *AckUpdate) (*Status
 		return falseStatus, ErrNoAuthToken
 	}
 
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasPermission(username, request.QueueName, rbac.ACK_ACTION)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
 	_, err = s.sendCommand(fsm.ACK, structs.AckUpdate{
 		QueueName:  request.QueueName,
 		Id:         request.Id,
 		ConsumerID: consumerID,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -278,11 +309,26 @@ func (s mQEndpointsServer) ChangePassword(ctx context.Context, request *ChangeCr
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.CHANGE_PASSWORD, structs.ChangeCredentials{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_CHANGE_PASSWORD)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.CHANGE_PASSWORD, structs.ChangeCredentials{
 		Username:    request.Username,
 		OldPassword: auth.GenerateHash(request.OldPassword, s.salt),
 		NewPassword: auth.GenerateHash(request.NewPassword, s.salt),
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -312,11 +358,26 @@ func (s mQEndpointsServer) Nack(ctx context.Context, request *AckUpdate) (*Statu
 		return falseStatus, ErrNoAuthToken
 	}
 
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasPermission(username, request.QueueName, rbac.ACK_ACTION)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
 	_, err = s.sendCommand(fsm.NACK, structs.AckUpdate{
 		QueueName:  request.QueueName,
 		Id:         request.Id,
 		ConsumerID: consumerID,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -341,9 +402,24 @@ func (s mQEndpointsServer) DeleteQueue(ctx context.Context, request *DeleteQueue
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.DELETE_QUEUE, structs.DeleteQueueInfo{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_DELETE_QUEUE)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.DELETE_QUEUE, structs.DeleteQueueInfo{
 		QueueName: request.QueueName,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -368,10 +444,25 @@ func (s mQEndpointsServer) AddRoutingKey(ctx context.Context, in *AddRoute) (*St
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.ADD_ROUTING_KEY, structs.AddRoute{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_ADD_ROUTING_KEY)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.ADD_ROUTING_KEY, structs.AddRoute{
 		RouteName: in.RouteName,
 		QueueName: in.QueueName,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -396,10 +487,25 @@ func (s mQEndpointsServer) DeleteRoutingKey(ctx context.Context, in *DeleteRoute
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.DELETE_ROUTING_KEY, structs.DeleteRoute{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_DELETE_ROUTING_KEY)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.DELETE_ROUTING_KEY, structs.DeleteRoute{
 		RouteName: in.RouteName,
 		QueueName: in.QueueName,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -424,10 +530,25 @@ func (s mQEndpointsServer) CreateUser(ctx context.Context, in *UserCreds) (*Stat
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.CREATE_ACCOUNT, structs.UserCreds{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_CREATE_USER)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.CREATE_ACCOUNT, structs.UserCreds{
 		Username: in.Username,
 		Password: auth.GenerateHash(in.Password, s.salt),
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -449,21 +570,40 @@ func (s mQEndpointsServer) SubmitBatchedMessages(ctx context.Context, in *BatchM
 		return falseStatus, ErrMetaDataNotFound
 	}
 
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
 	routes := make(map[string]*prebatch)
 	for _, msg := range in.Messages {
 		if err := validateMessage(msg.Data, msg.RoutingKey); err != nil {
 			return falseStatus, err
 		}
 
-		id := uuid.New()
-		idRaw := id[:]
-
 		if _, ok := routes[msg.RoutingKey]; ok {
+			id := uuid.New()
+			idRaw := id[:]
+
 			routes[msg.RoutingKey].data = append(routes[msg.RoutingKey].data, msg.Data)
 			routes[msg.RoutingKey].id = append(routes[msg.RoutingKey].id, idRaw)
 
 			continue
 		}
+
+		// only check it the first time we see the routing key
+		ok, err = s.rbacManager.HasPermission(username, msg.RoutingKey, rbac.SUBMIT_BATCH_ACTION)
+		if err != nil {
+			return falseStatus, err
+		}
+
+		if !ok {
+			return falseStatus, fmt.Errorf("does not have permission to perform action")
+		}
+
+		id := uuid.New()
+		idRaw := id[:]
 
 		routes[msg.RoutingKey] = &prebatch{
 			data: [][]byte{msg.Data},
@@ -484,9 +624,9 @@ func (s mQEndpointsServer) SubmitBatchedMessages(ctx context.Context, in *BatchM
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.SUBMIT_BATCH_MESSAGE, structs.BatchMessages{
+	_, err = s.sendCommand(fsm.SUBMIT_BATCH_MESSAGE, structs.BatchMessages{
 		Messages: msgs,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -521,9 +661,24 @@ func (s mQEndpointsServer) DeleteUser(ctx context.Context, msg *UserInformation)
 		return falseStatus, ErrNoAuthToken
 	}
 
-	_, err := s.sendCommand(fsm.DELETE_USER, structs.UserInformation{
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_DELETE_USER)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.DELETE_USER, structs.UserInformation{
 		Username: msg.Username,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -549,11 +704,26 @@ func (s mQEndpointsServer) BatchAck(ctx context.Context, msg *BatchAckUpdate) (*
 		return falseStatus, ErrNoAuthToken
 	}
 
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasPermission(username, msg.QueueName, rbac.BATCH_ACK_ACTION)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
 	_, err = s.sendCommand(fsm.BATCH_ACK, structs.BatchAckUpdate{
 		QueueName:  msg.QueueName,
 		Ids:        msg.Id,
 		ConsumerID: cnId,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -579,11 +749,26 @@ func (s mQEndpointsServer) BatchNack(ctx context.Context, msg *BatchNackUpdate) 
 		return falseStatus, ErrNoAuthToken
 	}
 
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return falseStatus, err
+	}
+
+	ok, err = s.rbacManager.HasPermission(username, msg.QueueName, rbac.BATCH_ACK_ACTION)
+	if err != nil {
+		return falseStatus, err
+	}
+
+	if !ok {
+		return falseStatus, fmt.Errorf("does not have permission to perform action")
+	}
+
 	_, err = s.sendCommand(fsm.BATCH_ACK, structs.BatchNackUpdate{
 		QueueName:  msg.QueueName,
 		Ids:        msg.Ids,
 		ConsumerID: cnId,
-	})
+	}, username)
 
 	return &Status{
 		Status: err == nil,
@@ -605,21 +790,71 @@ func (s mQEndpointsServer) LogOut(ctx context.Context, req *LogOutRequest) (*Log
 	}, err
 }
 
-func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}) (interface{}, error) {
+func (s mQEndpointsServer) CreateRole(ctx context.Context, req *CreateRoleRequest) (*CreateRoleResponse, error) {
+	if s.raftServer.State() != raft.LEADER {
+		return &CreateRoleResponse{
+			Status: false,
+		}, ErrNotLeader
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return &CreateRoleResponse{
+			Status: false,
+		}, ErrMetaDataNotFound
+	}
+
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return &CreateRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_CREATE_ROLE)
+	if err != nil {
+		return &CreateRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	if !ok {
+		return &CreateRoleResponse{
+			Status: false,
+		}, fmt.Errorf("does not have permission to perform action")
+	}
+
+	roleConvert, err := s.rbacManager.CreateRole(req.Role)
+	if err != nil {
+		return &CreateRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	_, err = s.sendCommand(fsm.BATCH_ACK, roleConvert, username)
+
+	return &CreateRoleResponse{
+		Status: err == nil,
+	}, err
+}
+
+func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interface{}, username string) (interface{}, error) {
 	jsonBytes, err := msgpack.Marshal(payload)
 	if err != nil {
 		return &fsm.ApplyResponse{}, err
 	}
 
-	obj := s.getCommandPool.GetObject()
-	obj.Op = payloadType
+	// obj := s.getCommandPool.GetObject()
+	// obj.Op = payloadType
 
 	data, err := msgpack.Marshal(fsm.CommandPayload{
-		Op:   payloadType,
-		Data: jsonBytes,
+		Op:       payloadType,
+		Data:     jsonBytes,
+		Username: username,
 	})
 
-	obj.Data = jsonBytes
+	// obj.Data = jsonBytes
 
 	if err != nil {
 		return &fsm.ApplyResponse{}, err

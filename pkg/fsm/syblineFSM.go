@@ -1,8 +1,10 @@
 package fsm
 
 import (
+	"fmt"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
+	"sybline/pkg/rbac"
 	"sybline/pkg/structs"
 
 	"github.com/GreedyKomodoDragon/raft"
@@ -19,9 +21,10 @@ type syblineFSM struct {
 	auth           auth.AuthManager
 	commandPayload *CommandPayload
 	batchMessage   *structs.BatchMessages
+	rbacManager    rbac.RoleManager
 }
 
-func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.AuthManager, queueManager core.QueueManager) (syblineFSM, error) {
+func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.AuthManager, queueManager core.QueueManager, rbacManager rbac.RoleManager) (syblineFSM, error) {
 	return syblineFSM{
 		broker:         broker,
 		consumer:       consumer,
@@ -29,6 +32,7 @@ func NewSyblineFSM(broker core.Broker, consumer core.ConsumerManager, auth auth.
 		queueManager:   queueManager,
 		commandPayload: &CommandPayload{},
 		batchMessage:   &structs.BatchMessages{},
+		rbacManager:    rbacManager,
 	}, nil
 }
 
@@ -55,6 +59,15 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_CREATE_QUEUE)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
 		return nil, b.broker.CreateQueue(payCasted.Name, payCasted.RoutingKey, payCasted.Size,
 			payCasted.RetryLimit, payCasted.HasDLQueue)
 
@@ -62,6 +75,15 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 		var payCasted structs.MessageInfo
 		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasPermission(payload.Username, payCasted.Rk, rbac.SUBMIT_MESSAGE_ACTION)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
 		}
 
 		return nil, b.broker.AddMessage(payCasted.Rk, payCasted.Data, payCasted.Id)
@@ -72,6 +94,17 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 
 		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 			return nil, err
+		}
+
+		for _, data := range payCasted.Messages {
+			ok, err := b.rbacManager.HasPermission(payload.Username, data.RK, rbac.SUBMIT_BATCH_ACTION)
+			if err != nil {
+				return nil, err
+			}
+
+			if !ok {
+				return nil, fmt.Errorf("does not have permission to perform action")
+			}
 		}
 
 		var errIn error = nil
@@ -89,6 +122,15 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_ADD_ROUTING_KEY)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
 		return nil, b.broker.AddRouteKey(payCasted.RouteName, payCasted.QueueName)
 
 	case DELETE_ROUTING_KEY:
@@ -97,12 +139,30 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_DELETE_ROUTING_KEY)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
 		return nil, b.broker.DeleteRoutingKey(payCasted.RouteName, payCasted.QueueName)
 
 	case GET_MESSAGES:
 		var payCasted structs.RequestMessageData
 		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasPermission(payload.Username, payCasted.QueueName, rbac.GET_MESSAGES_ACTION)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
 		}
 
 		messages, err := b.consumer.GetMessages(payCasted.QueueName, payCasted.Amount, payCasted.ConsumerID, payCasted.Time)
@@ -118,12 +178,30 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
+		ok, err := b.rbacManager.HasPermission(payload.Username, payCasted.QueueName, rbac.ACK_ACTION)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
 		return nil, b.consumer.Ack(payCasted.QueueName, payCasted.Id, payCasted.ConsumerID)
 
 	case NACK:
 		var payCasted structs.AckUpdate
 		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasPermission(payload.Username, payCasted.QueueName, rbac.ACK_ACTION)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
 		}
 
 		return nil, b.consumer.Nack(payCasted.QueueName, payCasted.Id, payCasted.ConsumerID)
@@ -134,12 +212,30 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_DELETE_QUEUE)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
 		return nil, b.broker.DeleteQueue(payCasted.QueueName)
 
 	case CREATE_ACCOUNT:
 		var payCasted structs.UserCreds
 		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_CREATE_USER)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
 		}
 
 		return nil, b.auth.CreateUser(payCasted.Username, payCasted.Password)
@@ -150,21 +246,30 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
-		return b.auth.ChangePassword(payCasted.Username, payCasted.OldPassword, payCasted.NewPassword)
-
-	case REMOVE_LOCKS:
-		var payCasted structs.RemoveLocks
-		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_CHANGE_PASSWORD)
+		if err != nil {
 			return nil, err
 		}
 
-		b.queueManager.ReleaseAllLocksByConsumer(payCasted.ConsumerID)
-		return nil, nil
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
+		return b.auth.ChangePassword(payCasted.Username, payCasted.OldPassword, payCasted.NewPassword)
 
 	case DELETE_USER:
 		var payCasted structs.UserInformation
 		if err := msgpack.Unmarshal(payload.Data, &payCasted); err != nil {
 			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_DELETE_USER)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
 		}
 
 		return nil, b.auth.DeleteUser(payCasted.Username)
@@ -175,12 +280,30 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			return nil, err
 		}
 
+		ok, err := b.rbacManager.HasPermission(payload.Username, data.QueueName, rbac.BATCH_ACK_ACTION)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
 		return nil, b.consumer.BatchAck(data.QueueName, data.Ids, data.ConsumerID)
 
 	case BATCH_NACK:
 		var data structs.BatchNackUpdate
 		if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
 			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasPermission(payload.Username, data.QueueName, rbac.BATCH_ACK_ACTION)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
 		}
 
 		return nil, b.consumer.BatchNack(data.QueueName, data.Ids, data.ConsumerID)

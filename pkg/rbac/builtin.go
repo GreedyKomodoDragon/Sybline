@@ -10,6 +10,9 @@ func createBuiltInRoles(manager RoleManager) {
 		ALLOW_DELETE_ROLE,
 		ALLOW_ASSIGN_ROLE,
 		ALLOW_UNASSIGN_ROLE,
+		ALLOW_ADD_ROUTING_KEY,
+		ALLOW_DELETE_ROUTING_KEY,
+		ALLOW_CHANGE_PASSWORD,
 	}
 
 	anyAllow := map[string]bool{
@@ -72,6 +75,9 @@ func createBuiltInRoles(manager RoleManager) {
 		DENY_DELETE_ROLE,
 		DENY_ASSIGN_ROLE,
 		DENY_UNASSIGN_ROLE,
+		DENY_ADD_ROUTING_KEY,
+		DENY_DELETE_ROUTING_KEY,
+		DENY_CHANGE_PASSWORD,
 	}
 
 	anyDeny := map[string]bool{

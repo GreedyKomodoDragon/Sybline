@@ -23,6 +23,7 @@ service MQEndpoints {
     rpc BatchAck(BatchAckUpdate) returns (Status) {} 
     rpc BatchNack(BatchNackUpdate) returns (Status) {} 
     rpc LogOut(LogOutRequest) returns (LogOutResponse) {}
+    rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {}
 }
 
 message MessageInfo {
@@ -116,5 +117,13 @@ message LogOutRequest {
 }
 
 message LogOutResponse {
+    bool status = 1;
+}
+
+message CreateRoleRequest {
+    string role = 1;
+}
+
+message CreateRoleResponse {
     bool status = 1;
 }

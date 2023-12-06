@@ -24,7 +24,6 @@ type QueueManager interface {
 	BatchNack(name string, consumerID []byte, id [][]byte) error
 	Delete(name string) error
 	Exists(name string) bool
-	ReleaseAllLocksByConsumer(consumerID []byte)
 }
 
 type Message struct {
@@ -178,17 +177,6 @@ func (q queueManager) Delete(name string) error {
 func (q queueManager) Exists(name string) bool {
 	_, ok := q.queues[name]
 	return ok
-}
-
-func (q queueManager) ReleaseAllLocksByConsumer(consumerID []byte) {
-	for name := range q.queues {
-		queue, ok := q.queues[name]
-		if !ok {
-			continue
-		}
-
-		queue.UnlockAllFromConsumer(consumerID)
-	}
 }
 
 func (q queueManager) BatchAddMessage(name string, data [][]byte, ids [][]byte) error {
