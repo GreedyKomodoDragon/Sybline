@@ -27,6 +27,7 @@ type AuthManager interface {
 	ChangePassword(username, oldPassword, newPassword string) (bool, error)
 	GetConsumerID(md *metadata.MD) ([]byte, error)
 	GetUsername(md *metadata.MD) (string, error)
+	UserExists(username string) bool
 }
 
 func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server) (AuthManager, error) {
@@ -240,6 +241,16 @@ func (a *authManager) GetUsername(md *metadata.MD) (string, error) {
 	}
 
 	return userSlice[0], nil
+}
+
+func (a *authManager) UserExists(username string) bool {
+	for _, data := range a.credentials {
+		if data.username == username {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (a *authManager) deleteUsername(username string) {

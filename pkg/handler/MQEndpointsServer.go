@@ -832,9 +832,135 @@ func (s mQEndpointsServer) CreateRole(ctx context.Context, req *CreateRoleReques
 		}, err
 	}
 
-	_, err = s.sendCommand(fsm.BATCH_ACK, roleConvert, username)
+	_, err = s.sendCommand(fsm.CREATE_ROLE, roleConvert, username)
 
 	return &CreateRoleResponse{
+		Status: err == nil,
+	}, err
+}
+
+func (s mQEndpointsServer) AssignRole(ctx context.Context, req *AssignRoleRequest) (*AssignRoleResponse, error) {
+	if s.raftServer.State() != raft.LEADER {
+		return &AssignRoleResponse{
+			Status: false,
+		}, ErrNotLeader
+	}
+
+	if req == nil || len(req.Role) == 0 || len(req.Username) == 0 {
+		return &AssignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("invalid request payload for AssignRole")
+	}
+
+	if !s.authManager.UserExists(req.Username) {
+		return &AssignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("user with name '%s' does not exist", req.Username)
+	}
+
+	if !s.rbacManager.RoleExists(req.Role) {
+		return &AssignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("role with name '%s' does not exist", req.Role)
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return &AssignRoleResponse{
+			Status: false,
+		}, ErrMetaDataNotFound
+	}
+
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return &AssignRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_ASSIGN_ROLE)
+	if err != nil {
+		return &AssignRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	if !ok {
+		return &AssignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.ASSIGN_ROLE, structs.RoleUsername{
+		Role:     req.Role,
+		Username: req.Username,
+	}, username)
+
+	return &AssignRoleResponse{
+		Status: err == nil,
+	}, err
+}
+
+func (s mQEndpointsServer) UnassignRole(ctx context.Context, req *UnassignRoleRequest) (*UnassignRoleResponse, error) {
+	if s.raftServer.State() != raft.LEADER {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, ErrNotLeader
+	}
+
+	if req == nil || len(req.Role) == 0 || len(req.Username) == 0 {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("invalid request payload for AssignRole")
+	}
+
+	if !s.authManager.UserExists(req.Username) {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("user with name '%s' does not exist", req.Username)
+	}
+
+	if !s.rbacManager.RoleExists(req.Role) {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("role with name '%s' does not exist", req.Role)
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, ErrMetaDataNotFound
+	}
+
+	username, err := s.authManager.GetUsername(&md)
+	if err != nil {
+		log.Err(err).Msg("unable to get username")
+		return &UnassignRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	ok, err = s.rbacManager.HasAdminPermission(username, rbac.ALLOW_ASSIGN_ROLE)
+	if err != nil {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, err
+	}
+
+	if !ok {
+		return &UnassignRoleResponse{
+			Status: false,
+		}, fmt.Errorf("does not have permission to perform action")
+	}
+
+	_, err = s.sendCommand(fsm.UNASSIGN_ROLE, structs.RoleUsername{
+		Role:     req.Role,
+		Username: req.Username,
+	}, username)
+
+	return &UnassignRoleResponse{
 		Status: err == nil,
 	}, err
 }
@@ -845,16 +971,12 @@ func (s mQEndpointsServer) sendCommand(payloadType fsm.Operation, payload interf
 		return &fsm.ApplyResponse{}, err
 	}
 
-	// obj := s.getCommandPool.GetObject()
-	// obj.Op = payloadType
+	obj := s.getCommandPool.GetObject()
+	obj.Op = payloadType
+	obj.Data = jsonBytes
+	obj.Username = username
 
-	data, err := msgpack.Marshal(fsm.CommandPayload{
-		Op:       payloadType,
-		Data:     jsonBytes,
-		Username: username,
-	})
-
-	// obj.Data = jsonBytes
+	data, err := msgpack.Marshal(obj)
 
 	if err != nil {
 		return &fsm.ApplyResponse{}, err

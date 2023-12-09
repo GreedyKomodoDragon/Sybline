@@ -40,6 +40,8 @@ type MQEndpointsClient interface {
 	BatchNack(ctx context.Context, in *BatchNackUpdate, opts ...grpc.CallOption) (*Status, error)
 	LogOut(ctx context.Context, in *LogOutRequest, opts ...grpc.CallOption) (*LogOutResponse, error)
 	CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*CreateRoleResponse, error)
+	AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*AssignRoleResponse, error)
+	UnassignRole(ctx context.Context, in *UnassignRoleRequest, opts ...grpc.CallOption) (*UnassignRoleResponse, error)
 }
 
 type mQEndpointsClient struct {
@@ -212,6 +214,24 @@ func (c *mQEndpointsClient) CreateRole(ctx context.Context, in *CreateRoleReques
 	return out, nil
 }
 
+func (c *mQEndpointsClient) AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*AssignRoleResponse, error) {
+	out := new(AssignRoleResponse)
+	err := c.cc.Invoke(ctx, "/MQ.MQEndpoints/AssignRole", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mQEndpointsClient) UnassignRole(ctx context.Context, in *UnassignRoleRequest, opts ...grpc.CallOption) (*UnassignRoleResponse, error) {
+	out := new(UnassignRoleResponse)
+	err := c.cc.Invoke(ctx, "/MQ.MQEndpoints/UnassignRole", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MQEndpointsServer is the server API for MQEndpoints service.
 // All implementations must embed UnimplementedMQEndpointsServer
 // for forward compatibility
@@ -234,6 +254,8 @@ type MQEndpointsServer interface {
 	BatchNack(context.Context, *BatchNackUpdate) (*Status, error)
 	LogOut(context.Context, *LogOutRequest) (*LogOutResponse, error)
 	CreateRole(context.Context, *CreateRoleRequest) (*CreateRoleResponse, error)
+	AssignRole(context.Context, *AssignRoleRequest) (*AssignRoleResponse, error)
+	UnassignRole(context.Context, *UnassignRoleRequest) (*UnassignRoleResponse, error)
 	mustEmbedUnimplementedMQEndpointsServer()
 }
 
@@ -294,6 +316,12 @@ func (UnimplementedMQEndpointsServer) LogOut(context.Context, *LogOutRequest) (*
 }
 func (UnimplementedMQEndpointsServer) CreateRole(context.Context, *CreateRoleRequest) (*CreateRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateRole not implemented")
+}
+func (UnimplementedMQEndpointsServer) AssignRole(context.Context, *AssignRoleRequest) (*AssignRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AssignRole not implemented")
+}
+func (UnimplementedMQEndpointsServer) UnassignRole(context.Context, *UnassignRoleRequest) (*UnassignRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnassignRole not implemented")
 }
 func (UnimplementedMQEndpointsServer) mustEmbedUnimplementedMQEndpointsServer() {}
 
@@ -632,6 +660,42 @@ func _MQEndpoints_CreateRole_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MQEndpoints_AssignRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AssignRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MQEndpointsServer).AssignRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/MQ.MQEndpoints/AssignRole",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MQEndpointsServer).AssignRole(ctx, req.(*AssignRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MQEndpoints_UnassignRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnassignRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MQEndpointsServer).UnassignRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/MQ.MQEndpoints/UnassignRole",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MQEndpointsServer).UnassignRole(ctx, req.(*UnassignRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MQEndpoints_ServiceDesc is the grpc.ServiceDesc for MQEndpoints service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -710,6 +774,14 @@ var MQEndpoints_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateRole",
 			Handler:    _MQEndpoints_CreateRole_Handler,
+		},
+		{
+			MethodName: "AssignRole",
+			Handler:    _MQEndpoints_AssignRole_Handler,
+		},
+		{
+			MethodName: "UnassignRole",
+			Handler:    _MQEndpoints_UnassignRole_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

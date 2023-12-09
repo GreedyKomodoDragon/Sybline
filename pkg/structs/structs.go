@@ -106,3 +106,8 @@ type BatchNackUpdate struct {
 	Ids        [][]byte
 	ConsumerID []byte
 }
+
+type RoleUsername struct {
+	Role     string
+	Username string
+}

@@ -61,7 +61,36 @@ The list of features are:
         * Incremental Snapshot to disk
         * S3 Options Planned
 * Metrics
-    * /metrics endpoint for prometheus
+    * /metrics endpoint for prometheus (mTLS authentication only)
+
+## Role Based Access Control
+
+Below is an example of a JSON role that could be assigned to a user. The example is for an admin only role.
+
+```js
+{
+    "role": "ADMIN-ONLY", // Name of the role
+    "actions": {
+        "GetMessages": "deny:*",
+        "SubmitMessage": "deny:*",
+        "SubmitBatchedMessages": "deny:*",
+        "CreateQueue": "allow",
+        "ChangePassword": "allow",
+        "Ack": "deny:*",
+        "BatchAck": "deny:*",
+        "DeleteQueue": "allow",
+        "CreateUser": "allow",
+        "DeleteUser": "allow",
+        "CreateRole": "allow",
+        "DeleteRole": "allow",
+        "AssignRole": "allow",
+        "UnAssignRole": "allow",
+        "CreateRole": "allow"
+    }
+}
+```
+
+If you have used anything like AWS IAM you should feel relatively comfortable with how Sybline handles access control via roles.
 
 # Client Languages supported 
 

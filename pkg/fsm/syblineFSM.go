@@ -307,6 +307,73 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 		}
 
 		return nil, b.consumer.BatchNack(data.QueueName, data.Ids, data.ConsumerID)
+
+	case CREATE_ROLE:
+		var data rbac.Role
+		if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
+			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_CREATE_ROLE)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
+		return nil, b.rbacManager.AddRole(data)
+
+	case ASSIGN_ROLE:
+		var data structs.RoleUsername
+		if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
+			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_ASSIGN_ROLE)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
+		if !b.auth.UserExists(data.Username) {
+			return nil, fmt.Errorf("user with name '%s' does not exist", data.Username)
+		}
+
+		if !b.rbacManager.RoleExists(data.Role) {
+			return nil, fmt.Errorf("role with name '%s' does not exist", data.Role)
+		}
+
+		return nil, b.rbacManager.AssignRole(data.Username, data.Role)
+
+	case UNASSIGN_ROLE:
+		var data structs.RoleUsername
+		if err := msgpack.Unmarshal(payload.Data, &data); err != nil {
+			return nil, err
+		}
+
+		ok, err := b.rbacManager.HasAdminPermission(payload.Username, rbac.ALLOW_UNASSIGN_ROLE)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("does not have permission to perform action")
+		}
+
+		if !b.auth.UserExists(data.Username) {
+			return nil, fmt.Errorf("user with name '%s' does not exist", data.Username)
+		}
+
+		if !b.rbacManager.RoleExists(data.Role) {
+			return nil, fmt.Errorf("role with name '%s' does not exist", data.Role)
+		}
+
+		return nil, b.rbacManager.UnassignRole(data.Username, data.Role)
 	}
 
 	log.Error().Uint32("action", uint32(payload.Op)).Msg("not raft log command type")
