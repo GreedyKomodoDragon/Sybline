@@ -326,3 +326,24 @@ func Test_Builtin_DENY_All(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok, "should be false")
 }
+
+func Test_Builtin_Unassigned(t *testing.T) {
+	rm := rbac.NewRoleManager()
+
+	ok, err := rm.HasPermission("sybline", "routeName", rbac.ACK_ACTION)
+	require.False(t, ok, "should be false")
+	require.Error(t, err)
+
+	require.NoError(t, rm.AssignRole("sybline", "ROOT"))
+	require.NoError(t, rm.AssignRole("sybline", "DENY"))
+
+	ok, err = rm.HasPermission("sybline", "routeName", rbac.SUBMIT_MESSAGE_ACTION)
+	require.NoError(t, err)
+	require.False(t, ok, "should be false")
+
+	require.NoError(t, rm.UnassignRole("sybline", "DENY"))
+
+	ok, err = rm.HasPermission("sybline", "routeName", rbac.SUBMIT_MESSAGE_ACTION)
+	require.NoError(t, err)
+	require.True(t, ok, "should be true")
+}

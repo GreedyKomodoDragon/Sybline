@@ -415,7 +415,7 @@ func (r *roleManager) UnassignRole(username, roleName string) error {
 
 	for i, rol := range roles {
 		if rol.Name == roleName {
-			roles = remove(roles, i)
+			r.users[username] = remove(roles, i)
 			return nil
 		}
 	}
