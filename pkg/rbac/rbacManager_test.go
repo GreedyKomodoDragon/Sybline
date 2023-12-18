@@ -27,7 +27,9 @@ func TestCreateRole_Success(t *testing.T) {
 			"CreateRole": "allow",
 			"DeleteRole": "allow",
 			"AssignRole": "allow",
-			"UnassignRole": "allow"
+			"UnassignRole": "allow",
+			"AddRoutingKey": "allow",
+			"DeleteRoutingKey": "allow"
 		}
 	}
 	`
@@ -35,6 +37,63 @@ func TestCreateRole_Success(t *testing.T) {
 	rm := rbac.NewRoleManager()
 	_, err := rm.CreateRole(role)
 	require.NoError(t, err, "failed to create role")
+}
+
+func TestCreateRole_MissingActions(t *testing.T) {
+	role := `
+	{
+		"version": "1",
+		"role": "name"
+	}
+	`
+
+	rm := rbac.NewRoleManager()
+	_, err := rm.CreateRole(role)
+	require.Error(t, err, "should failed to create role")
+}
+
+func TestCreateRole_No_Actions(t *testing.T) {
+	role := `
+	{
+		"version": "1",
+		"role": "name",
+		"actions": {}
+	}
+	`
+
+	rm := rbac.NewRoleManager()
+	_, err := rm.CreateRole(role)
+	require.Error(t, err, "should failed to create role")
+}
+
+func TestCreateRole_MissingName(t *testing.T) {
+	role := `
+	{
+		"version": "1",
+		"actions": {
+			"GetMessages": "allow:queueOne,deny:queueTwo,deny:*",
+			"SubmitMessage": "allow:routeOne",
+			"SubmitBatchedMessages": "allow:routeOne",
+			"CreateQueue": "allow",
+			"ChangePassword": "allow",
+			"Ack": "allow:queueOne",
+			"BatchAck": "deny:queueOne",
+			"DeleteQueue": "allow",
+			"CreateUser": "allow",
+			"DeleteUser": "allow",
+			"CreateRole": "allow",
+			"DeleteRole": "allow",
+			"AssignRole": "allow",
+			"UnassignRole": "allow",
+			"AddRoutingKey": "allow",
+			"DeleteRoutingKey": "allow"
+		}
+	}
+	`
+
+	rm := rbac.NewRoleManager()
+	_, err := rm.CreateRole(role)
+	require.Error(t, err, "should failed to create role")
 }
 
 func TestCreateRole_Success_Admin_Permission(t *testing.T) {

@@ -130,6 +130,10 @@ func (r *roleManager) CreateRole(jsonRole string) (*Role, error) {
 		return nil, fmt.Errorf("invalid actions")
 	}
 
+	if len(actions) == 0 {
+		return nil, fmt.Errorf("no actions provided under actions")
+	}
+
 	for action, permissions := range actions {
 		perm, ok := permissions.(string)
 		if !ok {
