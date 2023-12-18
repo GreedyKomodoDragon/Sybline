@@ -15,6 +15,6 @@
         "CreateRole": "allow|deny",
         "DeleteRole": "allow|deny",
         "AssignRole": "allow|deny",
-        "UnAssignRole": "allow|deny"
+        "UnassignRole": "allow|deny"
     }
 }

@@ -158,6 +158,13 @@ func (r *roleManager) CreateRole(jsonRole string) (*Role, error) {
 			}
 
 			role.SubmitBatchedMessages = mp
+		case "Ack":
+			mp, err := parsePermissions(perm)
+			if err != nil {
+				return nil, err
+			}
+
+			role.Ack = mp
 		case "BatchAck":
 			mp, err := parsePermissions(perm)
 			if err != nil {
@@ -244,7 +251,7 @@ func (r *roleManager) CreateRole(jsonRole string) (*Role, error) {
 			} else {
 				role.AdminPermissions = append(role.AdminPermissions, DENY_ASSIGN_ROLE)
 			}
-		case "UnAssignRole":
+		case "UnassignRole":
 			result, err := parseAdminPermissions(perm)
 			if err != nil {
 				return nil, err
@@ -289,7 +296,7 @@ func (r *roleManager) CreateRole(jsonRole string) (*Role, error) {
 				role.AdminPermissions = append(role.AdminPermissions, DENY_DELETE_ROUTING_KEY)
 			}
 		default:
-			return nil, fmt.Errorf("invalid field found: %s", perm)
+			return nil, fmt.Errorf("invalid field found: %s", action)
 		}
 	}
 

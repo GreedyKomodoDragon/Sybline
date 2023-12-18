@@ -84,7 +84,7 @@ Below is an example of a JSON role that could be assigned to a user. The example
         "CreateRole": "allow",
         "DeleteRole": "allow",
         "AssignRole": "allow",
-        "UnAssignRole": "allow",
+        "UnassignRole": "allow",
         "CreateRole": "allow"
     }
 }
