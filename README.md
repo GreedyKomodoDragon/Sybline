@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-AGPL-blue.svg" alt="AGPL">
-   <img src="https://img.shields.io/badge/Go-00ADD8?style=&logo=go&logoColor=white" alt="AGPL">
+    <img src="https://img.shields.io/badge/license-AGPL-blue.svg" alt="AGPL">
+    <img src="https://img.shields.io/badge/Go-00ADD8?style=&logo=go&logoColor=white" alt="AGPL">
 </p>
 
 # Table of Contents
@@ -35,7 +35,7 @@ It does not offically support any single node implementations, you must run at l
 Likely to have bugs and be unstable.
 
 # Features
-See docs for more information: [Sybline Docs]()
+See docs for more information: [Sybline Docs](https://www.sybline.com)
 
 The list of features are:
 
@@ -178,7 +178,7 @@ Sybline (or any sybline related projects) are open to contributions whether thes
 
 Please note, if the feature does not align with the original goal of Sybline it will sadly not be accepted; we don't want the scope of Sybline to become too unmaintainable.
 
-If you are interested in the project but have no/little technical experience, please have a look at the [documentation repo](), it always needs changes or translations!
+If you are interested in the project but have no/little technical experience, please have a look at the [documentation repo](https://github.com/GreedyKomodoDragon/sybline-docs), it always needs changes or translations!
 
 # License
 
