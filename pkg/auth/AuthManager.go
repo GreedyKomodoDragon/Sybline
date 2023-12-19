@@ -26,6 +26,8 @@ type AuthManager interface {
 	LogOut(md *metadata.MD) error
 	ChangePassword(username, oldPassword, newPassword string) (bool, error)
 	GetConsumerID(md *metadata.MD) ([]byte, error)
+	GetUsername(md *metadata.MD) (string, error)
+	UserExists(username string) bool
 }
 
 func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server) (AuthManager, error) {
@@ -209,9 +211,9 @@ func (a *authManager) DeleteUser(username string) error {
 }
 
 func (a *authManager) getUsernameToken(md *metadata.MD) (string, string, error) {
-	userSlice := md.Get("username")
-	if len(userSlice) == 0 {
-		return "", "", fmt.Errorf("missing username")
+	username, err := a.GetUsername(md)
+	if err != nil {
+		return "", "", err
 	}
 
 	tokenSlice := md.Get(a.tokenName)
@@ -219,7 +221,7 @@ func (a *authManager) getUsernameToken(md *metadata.MD) (string, string, error) 
 		return "", "", fmt.Errorf("missing token")
 	}
 
-	return userSlice[0], tokenSlice[0], nil
+	return username, tokenSlice[0], nil
 }
 
 func (a *authManager) getUserCredentials(username string) *saltPassword {
@@ -230,6 +232,25 @@ func (a *authManager) getUserCredentials(username string) *saltPassword {
 	}
 
 	return nil
+}
+
+func (a *authManager) GetUsername(md *metadata.MD) (string, error) {
+	userSlice := md.Get("username")
+	if len(userSlice) == 0 {
+		return "", fmt.Errorf("missing username")
+	}
+
+	return userSlice[0], nil
+}
+
+func (a *authManager) UserExists(username string) bool {
+	for _, data := range a.credentials {
+		if data.username == username {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (a *authManager) deleteUsername(username string) {
