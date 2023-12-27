@@ -15,6 +15,11 @@ var ErrQueueDoesNotExist = errors.New("queue name used does not exist")
 var ErrQueueMustHaveOneRoutingKey = errors.New("each queue must have at least one routing key")
 var ErrEmptyData = errors.New("cannot add message that is empty")
 
+type KeyQueueMapping struct {
+	Key    string   `json:"key"`
+	Queues []string `json:"queues"`
+}
+
 type Broker interface {
 	CreateQueue(name, routingKey string, size, retryLimit uint32, hasDLQ bool) error
 	DeleteQueue(name string) error
@@ -22,6 +27,7 @@ type Broker interface {
 	BatchAddMessage(routingKey string, data [][]byte, ids [][]byte) error
 	AddRouteKey(routingKey, queueName string) error
 	DeleteRoutingKey(routingKey, queueName string) error
+	GetKeyMappings() []KeyQueueMapping
 }
 
 func NewBroker(queueManager QueueManager) Broker {
@@ -213,6 +219,19 @@ func (b broker) BatchAddMessage(routingKey string, datas [][]byte, ids [][]byte)
 	wg.Wait()
 
 	return nil
+}
+
+func (b broker) GetKeyMappings() []KeyQueueMapping {
+	mappings := []KeyQueueMapping{}
+
+	for key, value := range b.routing {
+		mappings = append(mappings, KeyQueueMapping{
+			Key:    key,
+			Queues: value,
+		})
+	}
+
+	return mappings
 }
 
 func contains(s []string, str string) bool {

@@ -14,6 +14,7 @@ import (
 	"sybline/pkg/fsm"
 	"sybline/pkg/handler"
 	"sybline/pkg/rbac"
+	"sybline/pkg/rest"
 
 	"time"
 
@@ -345,6 +346,9 @@ func main() {
 	})
 
 	raftServer.Start()
+
+	app := rest.NewRestServer(broker)
+	go app.Listen(":7878")
 
 	log.Info().Int("port", port).Msg("listening on port")
 	grpcServer.RegisterService(&handler.MQEndpoints_ServiceDesc, handler.NewServer(rbacManager, authManger, raftServer, salt))
