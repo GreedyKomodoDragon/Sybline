@@ -19,6 +19,10 @@ var ErrUsernameAlreadyTaken = errors.New("username already taken")
 var ErrInvalidLogin = errors.New("invalid login details")
 var ErrAtLeastOneAccount = errors.New("cannot delete all accounts, at least one must remain")
 
+type Accounts struct {
+	Accounts []string `json:"accounts"`
+}
+
 type AuthManager interface {
 	CreateUser(username, password string) error
 	DeleteUser(username string) error
@@ -28,6 +32,7 @@ type AuthManager interface {
 	GetConsumerID(md *metadata.MD) ([]byte, error)
 	GetUsername(md *metadata.MD) (string, error)
 	UserExists(username string) bool
+	GetAccounts() *Accounts
 }
 
 func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server) (AuthManager, error) {
@@ -251,6 +256,18 @@ func (a *authManager) UserExists(username string) bool {
 	}
 
 	return false
+}
+
+func (a *authManager) GetAccounts() *Accounts {
+	accounts := &Accounts{
+		Accounts: []string{},
+	}
+
+	for _, data := range a.credentials {
+		accounts.Accounts = append(accounts.Accounts, data.username)
+	}
+
+	return accounts
 }
 
 func (a *authManager) deleteUsername(username string) {

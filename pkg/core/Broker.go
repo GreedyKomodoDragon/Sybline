@@ -16,7 +16,10 @@ var ErrQueueMustHaveOneRoutingKey = errors.New("each queue must have at least on
 var ErrEmptyData = errors.New("cannot add message that is empty")
 
 type KeyQueueMapping struct {
-	Key    string   `json:"key"`
+	Keys []string `json:"keys"`
+}
+
+type Queues struct {
 	Queues []string `json:"queues"`
 }
 
@@ -27,7 +30,8 @@ type Broker interface {
 	BatchAddMessage(routingKey string, data [][]byte, ids [][]byte) error
 	AddRouteKey(routingKey, queueName string) error
 	DeleteRoutingKey(routingKey, queueName string) error
-	GetKeyMappings() []KeyQueueMapping
+	GetKeys() *KeyQueueMapping
+	GetQueues(routingKey string) (*Queues, error)
 }
 
 func NewBroker(queueManager QueueManager) Broker {
@@ -221,17 +225,29 @@ func (b broker) BatchAddMessage(routingKey string, datas [][]byte, ids [][]byte)
 	return nil
 }
 
-func (b broker) GetKeyMappings() []KeyQueueMapping {
-	mappings := []KeyQueueMapping{}
+func (b broker) GetKeys() *KeyQueueMapping {
+	mappings := &KeyQueueMapping{
+		Keys: []string{},
+	}
 
-	for key, value := range b.routing {
-		mappings = append(mappings, KeyQueueMapping{
-			Key:    key,
-			Queues: value,
-		})
+	for key, _ := range b.routing {
+		mappings.Keys = append(mappings.Keys, key)
 	}
 
 	return mappings
+}
+
+func (b broker) GetQueues(routingKey string) (*Queues, error) {
+	queues, ok := b.routing[routingKey]
+	if !ok {
+		log.Error().Str("routingKey", routingKey).Msg("failed to find routing key")
+		return nil, ErrRoutingKeyDoesNotExist
+	}
+
+	return &Queues{
+		Queues: queues,
+	}, nil
+
 }
 
 func contains(s []string, str string) bool {

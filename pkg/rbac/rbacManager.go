@@ -38,6 +38,15 @@ const (
 	ALL string = "*"
 )
 
+type RawRole struct {
+	Name string `json:"name"`
+	Raw  string `json:"raw"`
+}
+
+type RawRoles struct {
+	Roles []RawRole `json:"Roles"`
+}
+
 type Action uint32
 
 const (
@@ -56,6 +65,7 @@ type Role struct {
 	Ack                   map[string]bool
 	BatchAck              map[string]bool
 	AdminPermissions      []AdminPermission
+	RawJSON               string
 }
 
 type RoleManager interface {
@@ -67,6 +77,7 @@ type RoleManager interface {
 	HasAdminPermission(username string, permission AdminPermission) (bool, error)
 	HasPermission(username string, entity string, permission Action) (bool, error)
 	RoleExists(role string) bool
+	GetRoles(user string) (*RawRoles, error)
 }
 
 func NewRoleManager() RoleManager {
@@ -118,6 +129,7 @@ func (r *roleManager) CreateRole(jsonRole string) (*Role, error) {
 		Ack:                   make(map[string]bool),
 		BatchAck:              make(map[string]bool),
 		AdminPermissions:      []AdminPermission{},
+		RawJSON:               jsonRole,
 	}
 
 	act, ok := roleData["actions"]
@@ -589,6 +601,26 @@ func (r *roleManager) RoleExists(role string) bool {
 
 	_, ok := r.roles[role]
 	return ok
+}
+
+func (r *roleManager) GetRoles(user string) (*RawRoles, error) {
+	roles, ok := r.users[user]
+	if !ok {
+		return nil, fmt.Errorf("user with name '%s' does not exist or have any roles", user)
+	}
+
+	rawRoles := &RawRoles{
+		Roles: []RawRole{},
+	}
+
+	for _, role := range roles {
+		rawRoles.Roles = append(rawRoles.Roles, RawRole{
+			Name: role.Name,
+			Raw:  role.RawJSON,
+		})
+	}
+
+	return rawRoles, nil
 }
 
 func remove(s []*Role, i int) []*Role {

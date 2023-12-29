@@ -30,6 +30,27 @@ func createBuiltInRoles(manager RoleManager) {
 		Ack:                   anyAllow,
 		BatchAck:              anyAllow,
 		AdminPermissions:      allAdmin,
+		RawJSON: `
+{
+	"role": "ROOT",
+	"actions": {
+		"GetMessages": "allow:*",
+		"SubmitMessage": "allow:*",
+		"SubmitBatchedMessages": "allow:*",
+		"CreateQueue": "allow",
+		"ChangePassword": "allow",
+		"Ack": "allow:*",
+		"BatchAck": "allow:*",
+		"DeleteQueue": "allow",
+		"CreateUser": "allow",
+		"DeleteUser": "allow",
+		"CreateRole": "allow",
+		"DeleteRole": "allow",
+		"AssignRole": "allow",
+		"UnassignRole": "allow",
+		"CreateRole": "allow"
+	}
+}`,
 	})
 
 	// Admin
