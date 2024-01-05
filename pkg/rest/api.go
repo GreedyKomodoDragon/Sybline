@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
-func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleManager) *fiber.App {
+func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleManager, queueManager core.QueueManager) *fiber.App {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 	})
@@ -38,6 +38,10 @@ func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleMana
 
 	app.Get("/info/accounts", func(c *fiber.Ctx) error {
 		return c.JSON(auth.GetAccounts())
+	})
+
+	app.Get("/info/queues", func(c *fiber.Ctx) error {
+		return c.JSON(queueManager.GetAllQueues())
 	})
 
 	app.Get("/info/accounts/roles/:username", func(c *fiber.Ctx) error {

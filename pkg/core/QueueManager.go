@@ -12,6 +12,10 @@ var ErrQueueAlreadyExists = errors.New("queue with name already exists")
 var ErrFailedEmpty = errors.New("unable to remove")
 var ErrInvalidQueueSize = errors.New("unable to create queue with size of 0")
 
+type QueueMetaData struct {
+	Name string `json:"name"`
+}
+
 type QueueManager interface {
 	CreateQueue(name string, size, retryLimit uint32, hasDLQ bool) error
 	AddMessage(name string, data []byte, id []byte) error
@@ -24,6 +28,7 @@ type QueueManager interface {
 	BatchNack(name string, consumerID []byte, id [][]byte) error
 	Delete(name string) error
 	Exists(name string) bool
+	GetAllQueues() []QueueMetaData
 }
 
 type Message struct {
@@ -196,4 +201,16 @@ func (q queueManager) BatchAddMessage(name string, data [][]byte, ids [][]byte) 
 	queue.BatchEnqueue(msgs)
 
 	return nil
+}
+
+func (q queueManager) GetAllQueues() []QueueMetaData {
+	queues := []QueueMetaData{}
+
+	for name, _ := range q.queues {
+		queues = append(queues, QueueMetaData{
+			Name: name,
+		})
+	}
+
+	return queues
 }

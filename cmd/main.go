@@ -347,7 +347,7 @@ func main() {
 
 	raftServer.Start()
 
-	app := rest.NewRestServer(broker, authManger, rbacManager)
+	app := rest.NewRestServer(broker, authManger, rbacManager, queueMan)
 	go app.Listen(":7878")
 
 	log.Info().Int("port", port).Msg("listening on port")
