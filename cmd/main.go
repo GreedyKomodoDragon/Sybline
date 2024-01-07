@@ -15,6 +15,7 @@ import (
 	"sybline/pkg/handler"
 	"sybline/pkg/rbac"
 	"sybline/pkg/rest"
+	"sybline/pkg/rpc"
 
 	"time"
 
@@ -222,57 +223,9 @@ func main() {
 		}
 	}()
 
-	opts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(
-			// Order matters e.g. tracing interceptor have to create span first for the later exemplars to work.
-			otelgrpc.UnaryServerInterceptor(),
-			srvMetrics.UnaryServerInterceptor(),
-			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
-		),
-		grpc.ChainStreamInterceptor(
-			otelgrpc.StreamServerInterceptor(),
-			srvMetrics.StreamServerInterceptor(),
-			recovery.StreamServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
-		),
-	}
-
-	if isTLSEnabled {
-		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
-		if err != nil {
-			log.Fatal().Msg("Failed to generate credentials: " + err.Error())
-		}
-		opts = []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
-	}
-
-	// log directory - Create a folder/directory at a full qualified path
-	err = os.MkdirAll("node_data/logs", 0755)
-	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		log.Fatal().Err(err)
-	}
-
-	queueMan := core.NewQueueManager(nodeTTL)
-	broker := core.NewBroker(queueMan)
-	consumer := core.NewConsumerManager(queueMan)
-
-	electionTimeout := v.GetInt(ELECTION_TIMEOUT)
-	if electionTimeout == 0 {
-		electionTimeout = 2
-	}
-
-	heartbeatTimeout := v.GetInt(HEARTBEAT_TIMEOUT)
-	if heartbeatTimeout == 0 {
-		heartbeatTimeout = 2
-	}
-
-	snapshotThreshold := v.GetUint64(SNAPSHOT_THRESHOLD)
-	if snapshotThreshold == 0 {
-		snapshotThreshold = 10000
-	}
-
-	grpcServer := grpc.NewServer(opts...)
 	addresses := strings.Split(v.GetString(addresses), ",")
-
 	servers := []raft.Server{}
+
 	ids := strings.Split(v.GetString(nodes), ",")
 	if len(ids) != len(addresses) {
 		log.Fatal().Msg("addresses and ids must be same length")
@@ -304,15 +257,36 @@ func main() {
 		})
 	}
 
-	grpcServer.RegisterService(&auth.Session_ServiceDesc, auth.NewSessionServer(sessHandler))
-
 	tDur := time.Second * time.Duration(tokenDuration)
 	authManger, err := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur, servers)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
 
-	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
+	// log directory - Create a folder/directory at a full qualified path
+	err = os.MkdirAll("node_data/logs", 0755)
+	if err != nil && !strings.Contains(err.Error(), "file exists") {
+		log.Fatal().Err(err)
+	}
+
+	queueMan := core.NewQueueManager(nodeTTL)
+	broker := core.NewBroker(queueMan)
+	consumer := core.NewConsumerManager(queueMan)
+
+	electionTimeout := v.GetInt(ELECTION_TIMEOUT)
+	if electionTimeout == 0 {
+		electionTimeout = 2
+	}
+
+	heartbeatTimeout := v.GetInt(HEARTBEAT_TIMEOUT)
+	if heartbeatTimeout == 0 {
+		heartbeatTimeout = 2
+	}
+
+	snapshotThreshold := v.GetUint64(SNAPSHOT_THRESHOLD)
+	if snapshotThreshold == 0 {
+		snapshotThreshold = 10000
+	}
 
 	rbacManager := rbac.NewRoleManager()
 
@@ -329,7 +303,7 @@ func main() {
 		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
 
-	raftServer := raft.NewRaftServer(fsmStore, logStore, grpcServer, &raft.Configuration{
+	raftServer := raft.NewRaftServer(fsmStore, logStore, &raft.Configuration{
 		RaftConfig: &raft.RaftConfig{
 			Servers: servers,
 			Id:      raftId,
@@ -345,12 +319,39 @@ func main() {
 		},
 	})
 
-	raftServer.Start()
+	opts := []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(
+			// Order matters e.g. tracing interceptor have to create span first for the later exemplars to work.
+			otelgrpc.UnaryServerInterceptor(),
+			srvMetrics.UnaryServerInterceptor(),
+			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
+			rpc.IsLeader(raftServer),
+			rpc.AuthenticationInterceptor(authManger),
+		),
+	}
 
-	app := rest.NewRestServer(broker, authManger, rbacManager, queueMan)
+	grpcServer := grpc.NewServer(opts...)
+	grpcServer.RegisterService(&auth.Session_ServiceDesc, auth.NewSessionServer(sessHandler))
+
+	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
+
+	if isTLSEnabled {
+		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
+		if err != nil {
+			log.Fatal().Msg("Failed to generate credentials: " + err.Error())
+		}
+		opts = []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
+	}
+
+	raftServer.Start(grpcServer)
+
+	hand := handler.NewHandler(rbacManager, authManger, raftServer, salt)
+	grpcAPI := rpc.NewServer(hand)
+
+	app := rest.NewRestServer(broker, authManger, rbacManager, queueMan, raftServer, hand)
 	go app.Listen(":7878")
 
 	log.Info().Int("port", port).Msg("listening on port")
-	grpcServer.RegisterService(&handler.MQEndpoints_ServiceDesc, handler.NewServer(rbacManager, authManger, raftServer, salt))
+	grpcServer.RegisterService(&rpc.MQEndpoints_ServiceDesc, grpcAPI)
 	grpcServer.Serve(lis)
 }

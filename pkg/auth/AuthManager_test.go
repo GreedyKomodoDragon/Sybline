@@ -103,11 +103,11 @@ func TestAuthManager_IsLogin(t *testing.T) {
 	assert.Nil(t, err, "should be able to login with correct details")
 
 	md := metadata.New(map[string]string{"syb-token": token, "username": "username"})
-	_, err = a.GetConsumerID(&md)
+	_, err = a.GetConsumerIDViaMD(&md)
 	assert.Nil(t, err)
 
 	md = metadata.New(map[string]string{"syb-token": "token"})
-	_, err = a.GetConsumerID(&md)
+	_, err = a.GetConsumerIDViaMD(&md)
 	assert.NotNil(t, err)
 }
 

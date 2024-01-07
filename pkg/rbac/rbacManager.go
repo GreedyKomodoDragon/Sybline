@@ -10,7 +10,7 @@ import (
 type AdminPermission uint32
 
 const (
-	ALLOW_CREATE_QUEUE = iota
+	ALLOW_CREATE_QUEUE AdminPermission = iota
 	DENY_CREATE_QUEUE
 	ALLOW_DELETE_QUEUE
 	DENY_DELETE_QUEUE
@@ -50,7 +50,7 @@ type RawRoles struct {
 type Action uint32
 
 const (
-	GET_MESSAGES_ACTION = iota
+	GET_MESSAGES_ACTION Action = iota
 	SUBMIT_MESSAGE_ACTION
 	SUBMIT_BATCH_ACTION
 	ACK_ACTION

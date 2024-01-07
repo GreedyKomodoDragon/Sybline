@@ -27,10 +27,12 @@ type AuthManager interface {
 	CreateUser(username, password string) error
 	DeleteUser(username string) error
 	Login(username, password string) (string, error)
-	LogOut(md *metadata.MD) error
+	LogOut(username, token string) error
 	ChangePassword(username, oldPassword, newPassword string) (bool, error)
-	GetConsumerID(md *metadata.MD) ([]byte, error)
+	GetConsumerIDViaMD(md *metadata.MD) ([]byte, error)
+	GetConsumerID(username, token string) ([]byte, error)
 	GetUsername(md *metadata.MD) (string, error)
+	GetUsernameToken(md *metadata.MD) (string, string, error)
 	UserExists(username string) bool
 	GetAccounts() *Accounts
 }
@@ -85,6 +87,7 @@ func (a *authManager) CreateUser(username, password string) error {
 	defer a.creationMux.Unlock()
 
 	if user := a.getUserCredentials(username); user != nil {
+		fmt.Println("user")
 		return ErrUsernameAlreadyTaken
 	}
 
@@ -173,8 +176,8 @@ func (a *authManager) ChangePassword(username, oldPassword, newPassword string) 
 	return true, nil
 }
 
-func (a *authManager) GetConsumerID(md *metadata.MD) ([]byte, error) {
-	username, token, err := a.getUsernameToken(md)
+func (a *authManager) GetConsumerIDViaMD(md *metadata.MD) ([]byte, error) {
+	username, token, err := a.GetUsernameToken(md)
 	if err != nil {
 		return nil, err
 	}
@@ -182,12 +185,11 @@ func (a *authManager) GetConsumerID(md *metadata.MD) ([]byte, error) {
 	return a.sessionHandler.GetConsumerID(token, username)
 }
 
-func (a *authManager) LogOut(md *metadata.MD) error {
-	username, token, err := a.getUsernameToken(md)
-	if err != nil {
-		return err
-	}
+func (a *authManager) GetConsumerID(username, token string) ([]byte, error) {
+	return a.sessionHandler.GetConsumerID(token, username)
+}
 
+func (a *authManager) LogOut(username, token string) error {
 	if err := a.follSessions.DeleteSessions(token, username); err != nil {
 		return err
 	}
@@ -215,7 +217,7 @@ func (a *authManager) DeleteUser(username string) error {
 	return nil
 }
 
-func (a *authManager) getUsernameToken(md *metadata.MD) (string, string, error) {
+func (a *authManager) GetUsernameToken(md *metadata.MD) (string, string, error) {
 	username, err := a.GetUsername(md)
 	if err != nil {
 		return "", "", err

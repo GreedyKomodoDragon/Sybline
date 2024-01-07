@@ -188,7 +188,8 @@ func Test_Builtin_Root_Can_Do_All(t *testing.T) {
 func Test_Builtin_Admin(t *testing.T) {
 	rm := rbac.NewRoleManager()
 
-	ok, err := rm.HasPermission("sybline", "routeName", rbac.ALLOW_ASSIGN_ROLE)
+	ok, err := rm.HasPermission("sybline", "routeName", rbac.SUBMIT_MESSAGE_ACTION)
+	require.False(t, ok, "should be false: rbac.SUBMIT_MESSAGE_ACTION")
 	require.Error(t, err)
 
 	require.NoError(t, rm.AssignRole("sybline", "ADMIN"))
