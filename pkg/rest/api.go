@@ -1,6 +1,8 @@
 package rest
 
 import (
+	"context"
+	"fmt"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
 	"sybline/pkg/handler"
@@ -72,21 +74,57 @@ func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleMana
 		return c.JSON(result)
 	})
 
-	// app.Post("/accounts/roles/:username", func(c *fiber.Ctx) error {
-	// 	username := c.Params("username")
-	// 	if len(username) == 0 {
-	// 		c.SendString("invalid username length")
-	// 		return c.SendStatus(400)
-	// 	}
+	// Assiging Role
+	app.Put("/accounts/roles/:username/:role", func(c *fiber.Ctx) error {
+		username := c.Params("username")
+		if len(username) == 0 {
+			c.SendString("invalid username length")
+			return c.SendStatus(400)
+		}
 
-	// 	ctx := context.Background()
-	// 	ctx = context.WithValue(ctx, "consumerID", c.Locals("consumerID"))
-	// 	ctx = context.WithValue(ctx, "username", c.Locals("username"))
+		role := c.Params("role")
+		if len(username) == 0 {
+			c.SendString("invalid username length")
+			return c.SendStatus(400)
+		}
 
-	// 	hand.AddRoutingKey(ctx, "", "")
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find authentication information",
+			})
+		}
 
-	// 	return c.JSON(result)
-	// })
+		if err = hand.AssignRole(ctx, role, username); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusCreated)
+	})
 
 	return app
+}
+
+func createContextFromFiberContext(fc *fiber.Ctx) (context.Context, error) {
+	// Use the background context as the parent
+	ctx := context.Background()
+
+	// Get values from fiber.Ctx locals
+	consumerID := fc.Locals("consumerID")
+	username := fc.Locals("username")
+	token := fc.Locals("token")
+
+	// Check if any of the values are nil
+	if consumerID == nil || username == nil || token == nil {
+		return ctx, fmt.Errorf("consumerID, username, or token not found in context")
+	}
+
+	// Create a context.Context and add values to it
+	ctx = context.WithValue(ctx, "consumerID", consumerID)
+	ctx = context.WithValue(ctx, "username", username)
+	ctx = context.WithValue(ctx, "token", token)
+
+	return ctx, nil
 }

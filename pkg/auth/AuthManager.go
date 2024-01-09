@@ -87,7 +87,6 @@ func (a *authManager) CreateUser(username, password string) error {
 	defer a.creationMux.Unlock()
 
 	if user := a.getUserCredentials(username); user != nil {
-		fmt.Println("user")
 		return ErrUsernameAlreadyTaken
 	}
 
