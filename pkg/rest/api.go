@@ -30,48 +30,36 @@ func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleMana
 		return Authentication(c, auth)
 	})
 
-	app.Get("/info/routing", func(c *fiber.Ctx) error {
-		return c.JSON(*broker.GetKeys())
-	})
+	createV1(app, broker, auth, queueManager, rbac)
 
-	app.Get("/info/routing/:routingkey", func(c *fiber.Ctx) error {
-		routingkey := c.Params("routingkey")
-		if len(routingkey) == 0 {
-			c.SendString("invalid routing key length")
-			return c.SendStatus(400)
-		}
-
-		queues, err := broker.GetQueues(routingkey)
-		if err != nil {
-			c.SendString("invalid routing key name, does not exist")
-			return c.SendStatus(400)
-		}
-
-		return c.JSON(queues)
-	})
-
-	app.Get("/info/accounts", func(c *fiber.Ctx) error {
-		return c.JSON(auth.GetAccounts())
-	})
-
-	app.Get("/info/queues", func(c *fiber.Ctx) error {
-		return c.JSON(queueManager.GetAllQueues())
-	})
-
-	app.Get("/info/accounts/roles/:username", func(c *fiber.Ctx) error {
+	// Assiging Role
+	app.Put("/accounts/roles/:username/:role", func(c *fiber.Ctx) error {
 		username := c.Params("username")
 		if len(username) == 0 {
 			c.SendString("invalid username length")
 			return c.SendStatus(400)
 		}
 
-		result, err := rbac.GetRoles(username)
-		if err != nil {
-			c.SendString("invalid username, may have no roles assigned")
+		role := c.Params("role")
+		if len(username) == 0 {
+			c.SendString("invalid username length")
 			return c.SendStatus(400)
 		}
 
-		return c.JSON(result)
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find authentication information",
+			})
+		}
+
+		if err = hand.AssignRole(ctx, role, username); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusCreated)
 	})
 
 	// Assiging Role
