@@ -35,10 +35,10 @@ type AuthManager interface {
 	GetUsernameToken(md *metadata.MD) (string, string, error)
 	UserExists(username string) bool
 	GetAccounts() *Accounts
+	Salt() string
 }
 
-func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server) (AuthManager, error) {
-
+func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server, salt string) (AuthManager, error) {
 	clients := []SessionClient{}
 	for _, server := range sessionServers {
 		conn, err := grpc.Dial(server.Address, server.Opts...)
@@ -61,6 +61,7 @@ func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGe
 		idGen:          idGen,
 		tokenDuration:  duration,
 		follSessions:   NewFollowerSessions(clients),
+		salt:           salt,
 	}, nil
 }
 
@@ -80,6 +81,7 @@ type authManager struct {
 	idGen          IdGenerator
 	tokenDuration  time.Duration
 	follSessions   FollowerSessions
+	salt           string
 }
 
 func (a *authManager) CreateUser(username, password string) error {
@@ -112,7 +114,7 @@ func (a *authManager) CreateUser(username, password string) error {
 func (a *authManager) Login(username, password string) (string, error) {
 	saltPass := a.getUserCredentials(username)
 	if saltPass == nil {
-		return "", ErrInvalidLogin
+		return "", fmt.Errorf("failed to get saltPass")
 	}
 
 	hash, err := scrypt.Key([]byte(password), saltPass.salt, a.hashStrength, 8, 1, 32)
@@ -269,6 +271,10 @@ func (a *authManager) GetAccounts() *Accounts {
 	}
 
 	return accounts
+}
+
+func (a *authManager) Salt() string {
+	return a.salt
 }
 
 func (a *authManager) deleteUsername(username string) {

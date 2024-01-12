@@ -6,6 +6,7 @@ import (
 	"sybline/pkg/rbac"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog/log"
 )
 
 func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager) {
@@ -68,7 +69,7 @@ type Credentials struct {
 	Password string `json:"password"`
 }
 
-func createLogin(router fiber.Router, auth auth.AuthManager) {
+func createLogin(router fiber.Router, authManager auth.AuthManager) {
 	router.Post("/login", func(c *fiber.Ctx) error {
 
 		var credentials Credentials
@@ -76,8 +77,9 @@ func createLogin(router fiber.Router, auth auth.AuthManager) {
 			return c.Status(400).SendString("Bad Request")
 		}
 
-		token, err := auth.Login(credentials.Username, credentials.Password)
+		token, err := authManager.Login(credentials.Username, auth.GenerateHash(credentials.Password, authManager.Salt()))
 		if err != nil {
+			log.Debug().Err(err).Msg("user failed to login")
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"message": "invalid credentials provided",
 			})

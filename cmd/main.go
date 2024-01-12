@@ -258,7 +258,7 @@ func main() {
 	}
 
 	tDur := time.Second * time.Duration(tokenDuration)
-	authManger, err := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur, servers)
+	authManger, err := auth.NewAuthManager(sessHandler, &auth.UuidGen{}, &auth.ByteGenerator{}, tDur, servers, salt)
 	if err != nil {
 		log.Fatal().Err(err)
 	}

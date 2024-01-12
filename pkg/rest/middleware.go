@@ -10,7 +10,7 @@ import (
 
 func IsLeader(c *fiber.Ctx, raftServer raft.Raft) error {
 	// ignore if just checking info -> allows followers to take some of the load
-	if strings.HasPrefix(c.Path(), "/info") {
+	if strings.Contains(c.Path(), "/info") {
 		return c.Next()
 	}
 
@@ -25,7 +25,7 @@ func IsLeader(c *fiber.Ctx, raftServer raft.Raft) error {
 
 func Authentication(c *fiber.Ctx, authManager auth.AuthManager) error {
 	// skip if just checking if leader
-	if c.Path() == "/info/leader" || c.Path() == "/login" {
+	if strings.HasSuffix(c.Path(), "/info/leader") || strings.HasSuffix(c.Path(), "/login") {
 		return c.Next()
 	}
 
