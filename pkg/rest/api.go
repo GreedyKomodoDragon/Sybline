@@ -30,67 +30,7 @@ func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleMana
 		return Authentication(c, auth)
 	})
 
-	createV1(app, broker, auth, queueManager, rbac)
-
-	// Assiging Role
-	app.Put("/accounts/roles/:username/:role", func(c *fiber.Ctx) error {
-		username := c.Params("username")
-		if len(username) == 0 {
-			c.SendString("invalid username length")
-			return c.SendStatus(400)
-		}
-
-		role := c.Params("role")
-		if len(username) == 0 {
-			c.SendString("invalid username length")
-			return c.SendStatus(400)
-		}
-
-		ctx, err := createContextFromFiberContext(c)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"message": "unable to find authentication information",
-			})
-		}
-
-		if err = hand.AssignRole(ctx, role, username); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"message": err.Error(),
-			})
-		}
-
-		return c.SendStatus(fiber.StatusCreated)
-	})
-
-	// Assiging Role
-	app.Put("/accounts/roles/:username/:role", func(c *fiber.Ctx) error {
-		username := c.Params("username")
-		if len(username) == 0 {
-			c.SendString("invalid username length")
-			return c.SendStatus(400)
-		}
-
-		role := c.Params("role")
-		if len(username) == 0 {
-			c.SendString("invalid username length")
-			return c.SendStatus(400)
-		}
-
-		ctx, err := createContextFromFiberContext(c)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"message": "unable to find authentication information",
-			})
-		}
-
-		if err = hand.AssignRole(ctx, role, username); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"message": err.Error(),
-			})
-		}
-
-		return c.SendStatus(fiber.StatusCreated)
-	})
+	createV1(app, broker, auth, queueManager, rbac, hand)
 
 	return app
 }

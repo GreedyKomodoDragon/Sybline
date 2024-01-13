@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/base64"
 	"strings"
 	"sybline/pkg/auth"
 
@@ -25,21 +26,44 @@ func IsLeader(c *fiber.Ctx, raftServer raft.Raft) error {
 
 func Authentication(c *fiber.Ctx, authManager auth.AuthManager) error {
 	// skip if just checking if leader
-	if strings.HasSuffix(c.Path(), "/info/leader") || strings.HasSuffix(c.Path(), "/login") {
+	if strings.HasSuffix(c.Path(), "/info/leader") || (strings.HasSuffix(c.Path(), "/login") && c.Method() == "POST") {
 		return c.Next()
 	}
 
-	// Get token and username from cookies
-	token := c.Cookies("token")
-	username := c.Cookies("username")
-
-	// Check if token and username exist
-	if token == "" || username == "" {
+	// Get Authorization header
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"message": "Unauthorized",
 		})
 	}
 
+	// Check if the header is for Basic Authentication
+	if !strings.HasPrefix(authHeader, "Basic ") {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": "Invalid Authorization header",
+		})
+	}
+
+	// Decode the base64-encoded username and password
+	credentials, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(authHeader, "Basic "))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": "Invalid base64 encoding",
+		})
+	}
+
+	// Extract username and password
+	credentialsParts := strings.SplitN(string(credentials), ":", 2)
+	if len(credentialsParts) != 2 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": "Invalid credentials format",
+		})
+	}
+	username := credentialsParts[0]
+	token := credentialsParts[1]
+
+	// Validate username and password
 	id, err := authManager.GetConsumerID(username, token)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
