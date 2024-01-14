@@ -78,6 +78,7 @@ type RoleManager interface {
 	HasPermission(username string, entity string, permission Action) (bool, error)
 	RoleExists(role string) bool
 	GetRoles(user string) (*RawRoles, error)
+	GetAllRoles() *RawRoles
 }
 
 func NewRoleManager() RoleManager {
@@ -445,6 +446,7 @@ func (r *roleManager) UnassignRole(username, roleName string) error {
 
 	return fmt.Errorf("user with name '%s' does not have role '%s' to be unassigned", username, roleName)
 }
+
 func (r *roleManager) HasAdminPermission(username string, permission AdminPermission) (bool, error) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
@@ -621,6 +623,21 @@ func (r *roleManager) GetRoles(user string) (*RawRoles, error) {
 	}
 
 	return rawRoles, nil
+}
+
+func (r *roleManager) GetAllRoles() *RawRoles {
+	rawRoles := &RawRoles{
+		Roles: []RawRole{},
+	}
+
+	for _, role := range r.roles {
+		rawRoles.Roles = append(rawRoles.Roles, RawRole{
+			Name: role.Name,
+			Raw:  role.RawJSON,
+		})
+	}
+
+	return rawRoles
 }
 
 func remove(s []*Role, i int) []*Role {

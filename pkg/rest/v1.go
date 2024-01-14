@@ -85,6 +85,10 @@ func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, 
 		return c.JSON(auth.GetAccounts())
 	})
 
+	infoRouter.Get("/roles", func(c *fiber.Ctx) error {
+		return c.JSON(rbac.GetAllRoles())
+	})
+
 	infoRouter.Get("/accounts/roles/:username", func(c *fiber.Ctx) error {
 		username := c.Params("username")
 		if len(username) == 0 {

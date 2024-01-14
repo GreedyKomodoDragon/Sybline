@@ -11,7 +11,7 @@ import (
 
 func IsLeader(c *fiber.Ctx, raftServer raft.Raft) error {
 	// ignore if just checking info -> allows followers to take some of the load
-	if strings.Contains(c.Path(), "/info") {
+	if strings.Contains(c.Path(), "/info") || strings.Contains(c.Path(), "/login") {
 		return c.Next()
 	}
 
