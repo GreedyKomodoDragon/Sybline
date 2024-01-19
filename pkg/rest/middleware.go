@@ -67,7 +67,7 @@ func Authentication(c *fiber.Ctx, authManager auth.AuthManager) error {
 	id, err := authManager.GetConsumerID(username, token)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"message": "Unauthorized, no consumer token found",
 		})
 	}
 

@@ -21,7 +21,7 @@ func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, 
 func createAccounts(router fiber.Router, hand handler.Handler) {
 	accountsRouter := router.Group("/accounts")
 
-	// Adding a new account
+	// Adding a new role to an account account
 	accountsRouter.Put("/roles/:username/:role", func(c *fiber.Ctx) error {
 		username := c.Params("username")
 		if len(username) == 0 {
