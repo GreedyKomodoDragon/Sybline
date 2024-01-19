@@ -52,6 +52,37 @@ func createAccounts(router fiber.Router, hand handler.Handler) {
 
 		return c.SendStatus(fiber.StatusCreated)
 	})
+
+	accountsRouter.Delete("/roles/:username/:role", func(c *fiber.Ctx) error {
+		username := c.Params("username")
+		if len(username) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": "invalid username length",
+			})
+		}
+
+		role := c.Params("role")
+		if len(role) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": "invalid role length",
+			})
+		}
+
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		if err = hand.UnassignRole(ctx, role, username); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusOK)
+	})
 }
 
 func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager) {
