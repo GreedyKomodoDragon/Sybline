@@ -30,6 +30,27 @@ func createBuiltInRoles(manager RoleManager) {
 		Ack:                   anyAllow,
 		BatchAck:              anyAllow,
 		AdminPermissions:      allAdmin,
+		RawJSON: `
+{
+	"role": "ROOT",
+	"actions": {
+		"GetMessages": "allow:*",
+		"SubmitMessage": "allow:*",
+		"SubmitBatchedMessages": "allow:*",
+		"CreateQueue": "allow",
+		"ChangePassword": "allow",
+		"Ack": "allow:*",
+		"BatchAck": "allow:*",
+		"DeleteQueue": "allow",
+		"CreateUser": "allow",
+		"DeleteUser": "allow",
+		"CreateRole": "allow",
+		"DeleteRole": "allow",
+		"AssignRole": "allow",
+		"UnassignRole": "allow",
+		"CreateRole": "allow"
+	}
+}`,
 	})
 
 	// Admin
@@ -41,6 +62,22 @@ func createBuiltInRoles(manager RoleManager) {
 		Ack:                   empty,
 		BatchAck:              empty,
 		AdminPermissions:      allAdmin,
+		RawJSON: `
+		{
+			"role": "ADMIN",
+			"actions": {
+				"CreateQueue": "allow",
+				"ChangePassword": "allow",
+				"DeleteQueue": "allow",
+				"CreateUser": "allow",
+				"DeleteUser": "allow",
+				"CreateRole": "allow",
+				"DeleteRole": "allow",
+				"AssignRole": "allow",
+				"UnassignRole": "allow",
+				"CreateRole": "allow"
+			}
+		}`,
 	})
 
 	// Producer
@@ -52,6 +89,14 @@ func createBuiltInRoles(manager RoleManager) {
 		Ack:                   empty,
 		BatchAck:              empty,
 		AdminPermissions:      []AdminPermission{},
+		RawJSON: `
+		{
+			"role": "PRODUCER",
+			"actions": {
+				"SubmitMessage": "allow:*",
+				"SubmitBatchedMessages": "allow:*"
+			}
+		}`,
 	})
 
 	// Consumer
@@ -63,6 +108,15 @@ func createBuiltInRoles(manager RoleManager) {
 		Ack:                   anyAllow,
 		BatchAck:              anyAllow,
 		AdminPermissions:      []AdminPermission{},
+		RawJSON: `
+		{
+			"role": "CONSUMER",
+			"actions": {
+				"GetMessages": "allow:*",
+				"Ack": "allow:*",
+				"BatchAck": "allow:*"
+			}
+		}`,
 	})
 
 	// Deny-All
@@ -92,5 +146,26 @@ func createBuiltInRoles(manager RoleManager) {
 		Ack:                   anyDeny,
 		BatchAck:              anyDeny,
 		AdminPermissions:      denyAdmin,
+		RawJSON: `
+		{
+			"role": "DENY",
+			"actions": {
+				"GetMessages": "deny:*",
+				"SubmitMessage": "deny:*",
+				"SubmitBatchedMessages": "deny:*",
+				"CreateQueue": "deny",
+				"ChangePassword": "deny",
+				"Ack": "deny:*",
+				"BatchAck": "deny:*",
+				"DeleteQueue": "deny",
+				"CreateUser": "deny",
+				"DeleteUser": "deny",
+				"CreateRole": "deny",
+				"DeleteRole": "deny",
+				"AssignRole": "deny",
+				"UnassignRole": "deny",
+				"CreateRole": "deny"
+			}
+		}`,
 	})
 }

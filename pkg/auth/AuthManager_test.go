@@ -18,7 +18,7 @@ func TestAuthManager_CreateUser_Sync(t *testing.T) {
 	idGenMock := &IdGenMock{}
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "password")
@@ -33,7 +33,7 @@ func TestAuthManager_CreateUser_Async(t *testing.T) {
 	idGenMock := &IdGenMock{}
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	var wg sync.WaitGroup
@@ -67,7 +67,7 @@ func TestAuthManager_Login(t *testing.T) {
 	idGenMock.On("Generate").Return([]byte("ab"))
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	hashedPassword := auth.GenerateHash("password", "salt")
@@ -91,7 +91,7 @@ func TestAuthManager_IsLogin(t *testing.T) {
 	idGenMock.On("Generate").Return([]byte("ab"))
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	hashedPassword := auth.GenerateHash("password", "salt")
@@ -103,11 +103,11 @@ func TestAuthManager_IsLogin(t *testing.T) {
 	assert.Nil(t, err, "should be able to login with correct details")
 
 	md := metadata.New(map[string]string{"syb-token": token, "username": "username"})
-	_, err = a.GetConsumerID(&md)
+	_, err = a.GetConsumerIDViaMD(&md)
 	assert.Nil(t, err)
 
 	md = metadata.New(map[string]string{"syb-token": "token"})
-	_, err = a.GetConsumerID(&md)
+	_, err = a.GetConsumerIDViaMD(&md)
 	assert.NotNil(t, err)
 }
 
@@ -119,7 +119,7 @@ func TestAuthManager_Change_Password(t *testing.T) {
 	idGenMock.On("Generate").Return([]byte("ab"))
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "password")
@@ -145,7 +145,7 @@ func TestAuthManager_DeleteUser_User_Exists(t *testing.T) {
 	idGenMock := &IdGenMock{}
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "hashedPassword")
@@ -167,7 +167,7 @@ func TestAuthManager_DeleteUser_User_Does_Not_Exist(t *testing.T) {
 	idGenMock := &IdGenMock{}
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "hashedPassword")
@@ -182,7 +182,7 @@ func TestAuthManager_DeleteUser_Cannot_Delete_All(t *testing.T) {
 	idGenMock := &IdGenMock{}
 
 	sessionHand := auth.NewSessionHandler()
-	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{})
+	a, err := auth.NewAuthManager(sessionHand, tGenMock, idGenMock, time.Second*60, []raft.Server{}, "salt")
 	assert.Nil(t, err, "should be able to create auth manager")
 
 	err = a.CreateUser("username", "hashedPassword")

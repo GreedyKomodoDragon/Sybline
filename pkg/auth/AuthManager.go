@@ -19,19 +19,26 @@ var ErrUsernameAlreadyTaken = errors.New("username already taken")
 var ErrInvalidLogin = errors.New("invalid login details")
 var ErrAtLeastOneAccount = errors.New("cannot delete all accounts, at least one must remain")
 
+type Accounts struct {
+	Accounts []string `json:"accounts"`
+}
+
 type AuthManager interface {
 	CreateUser(username, password string) error
 	DeleteUser(username string) error
 	Login(username, password string) (string, error)
-	LogOut(md *metadata.MD) error
+	LogOut(username, token string) error
 	ChangePassword(username, oldPassword, newPassword string) (bool, error)
-	GetConsumerID(md *metadata.MD) ([]byte, error)
+	GetConsumerIDViaMD(md *metadata.MD) ([]byte, error)
+	GetConsumerID(username, token string) ([]byte, error)
 	GetUsername(md *metadata.MD) (string, error)
+	GetUsernameToken(md *metadata.MD) (string, string, error)
 	UserExists(username string) bool
+	GetAccounts() *Accounts
+	Salt() string
 }
 
-func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server) (AuthManager, error) {
-
+func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGen IdGenerator, duration time.Duration, sessionServers []raft.Server, salt string) (AuthManager, error) {
 	clients := []SessionClient{}
 	for _, server := range sessionServers {
 		conn, err := grpc.Dial(server.Address, server.Opts...)
@@ -54,6 +61,7 @@ func NewAuthManager(sessionHandler SessionHandler, tokenGen TokenGenerator, idGe
 		idGen:          idGen,
 		tokenDuration:  duration,
 		follSessions:   NewFollowerSessions(clients),
+		salt:           salt,
 	}, nil
 }
 
@@ -73,6 +81,7 @@ type authManager struct {
 	idGen          IdGenerator
 	tokenDuration  time.Duration
 	follSessions   FollowerSessions
+	salt           string
 }
 
 func (a *authManager) CreateUser(username, password string) error {
@@ -105,7 +114,7 @@ func (a *authManager) CreateUser(username, password string) error {
 func (a *authManager) Login(username, password string) (string, error) {
 	saltPass := a.getUserCredentials(username)
 	if saltPass == nil {
-		return "", ErrInvalidLogin
+		return "", fmt.Errorf("failed to get saltPass")
 	}
 
 	hash, err := scrypt.Key([]byte(password), saltPass.salt, a.hashStrength, 8, 1, 32)
@@ -168,8 +177,8 @@ func (a *authManager) ChangePassword(username, oldPassword, newPassword string) 
 	return true, nil
 }
 
-func (a *authManager) GetConsumerID(md *metadata.MD) ([]byte, error) {
-	username, token, err := a.getUsernameToken(md)
+func (a *authManager) GetConsumerIDViaMD(md *metadata.MD) ([]byte, error) {
+	username, token, err := a.GetUsernameToken(md)
 	if err != nil {
 		return nil, err
 	}
@@ -177,12 +186,11 @@ func (a *authManager) GetConsumerID(md *metadata.MD) ([]byte, error) {
 	return a.sessionHandler.GetConsumerID(token, username)
 }
 
-func (a *authManager) LogOut(md *metadata.MD) error {
-	username, token, err := a.getUsernameToken(md)
-	if err != nil {
-		return err
-	}
+func (a *authManager) GetConsumerID(username, token string) ([]byte, error) {
+	return a.sessionHandler.GetConsumerID(token, username)
+}
 
+func (a *authManager) LogOut(username, token string) error {
 	if err := a.follSessions.DeleteSessions(token, username); err != nil {
 		return err
 	}
@@ -210,7 +218,7 @@ func (a *authManager) DeleteUser(username string) error {
 	return nil
 }
 
-func (a *authManager) getUsernameToken(md *metadata.MD) (string, string, error) {
+func (a *authManager) GetUsernameToken(md *metadata.MD) (string, string, error) {
 	username, err := a.GetUsername(md)
 	if err != nil {
 		return "", "", err
@@ -251,6 +259,22 @@ func (a *authManager) UserExists(username string) bool {
 	}
 
 	return false
+}
+
+func (a *authManager) GetAccounts() *Accounts {
+	accounts := &Accounts{
+		Accounts: []string{},
+	}
+
+	for _, data := range a.credentials {
+		accounts.Accounts = append(accounts.Accounts, data.username)
+	}
+
+	return accounts
+}
+
+func (a *authManager) Salt() string {
+	return a.salt
 }
 
 func (a *authManager) deleteUsername(username string) {

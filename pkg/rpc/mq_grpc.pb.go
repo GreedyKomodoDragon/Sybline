@@ -4,7 +4,7 @@
 // - protoc             v3.21.12
 // source: pkg/handler/mq.proto
 
-package handler
+package rpc
 
 import (
 	context "context"
