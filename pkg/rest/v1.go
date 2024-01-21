@@ -16,6 +16,40 @@ func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, 
 	createInfo(router, broker, authManager, queueManager, rbac)
 	createAccounts(router, hand)
 	createLogin(router, authManager)
+	addBrokerRouter(router, hand)
+}
+
+type SubmitPayload struct {
+	RoutingKey string `json:"routingKey"`
+	Data       string `json:"data"`
+}
+
+func addBrokerRouter(router fiber.Router, hand handler.Handler) {
+	brokerRouter := router.Group("/broker")
+
+	brokerRouter.Post("/submit", func(c *fiber.Ctx) error {
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		var payload SubmitPayload
+		if err := c.BodyParser(&payload); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		if err := hand.SubmitMessage(ctx, payload.RoutingKey, []byte(payload.Data)); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusAccepted)
+	})
 }
 
 type AccountCredentials struct {
@@ -36,7 +70,9 @@ func createAccounts(router fiber.Router, hand handler.Handler) {
 
 		var credentials AccountCredentials
 		if err := c.BodyParser(&credentials); err != nil {
-			return c.Status(400).SendString("Bad Request")
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
 		}
 
 		if err := hand.CreateUser(ctx, credentials.Username, credentials.Password); err != nil {
