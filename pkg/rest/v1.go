@@ -18,8 +18,35 @@ func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, 
 	createLogin(router, authManager)
 }
 
+type AccountCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 func createAccounts(router fiber.Router, hand handler.Handler) {
 	accountsRouter := router.Group("/accounts")
+
+	accountsRouter.Post("/", func(c *fiber.Ctx) error {
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		var credentials AccountCredentials
+		if err := c.BodyParser(&credentials); err != nil {
+			return c.Status(400).SendString("Bad Request")
+		}
+
+		if err := hand.CreateUser(ctx, credentials.Username, credentials.Password); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusCreated)
+	})
 
 	// Adding a new role to an account account
 	accountsRouter.Put("/roles/:username/:role", func(c *fiber.Ctx) error {
