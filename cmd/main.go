@@ -38,7 +38,7 @@ import (
 
 const (
 	serverPort string = "SERVER_PORT"
-	PROM_PORT  string = "PROM_PORT"
+	REST_PORT  string = "PROM_PORT"
 	raftNodeId string = "RAFT_NODE_ID"
 
 	TLS_ENABLED     string = "TLS_ENABLED"
@@ -163,9 +163,9 @@ func main() {
 		port = 2221
 	}
 
-	promPort := v.GetInt(PROM_PORT)
-	if promPort == 0 {
-		promPort = 8080
+	restPort := v.GetInt(REST_PORT)
+	if restPort == 0 {
+		restPort = 7878
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -307,7 +307,7 @@ func main() {
 
 	app := rest.NewRestServer(broker, authManger, rbacManager, queueMan, raftServer, hand)
 	if isTLSEnabled {
-		ln, _ := net.Listen("tcp", ":7878")
+		ln, _ := net.Listen("tcp", ":"+strconv.Itoa(restPort))
 		ln = tls.NewListener(ln, tlsConfig)
 		go app.Listener(ln)
 	} else {
