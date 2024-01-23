@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -22,7 +21,6 @@ import (
 	"github.com/GreedyKomodoDragon/raft"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -45,9 +43,6 @@ const (
 
 	TLS_ENABLED     string = "TLS_ENABLED"
 	TLS_VERIFY_SKIP string = "TLS_VERIFY_SKIP"
-
-	TLS_ENABLED_PROM     string = "TLS_ENABLED_PROM"
-	TLS_VERIFY_SKIP_PROM string = "TLS_VERIFY_SKIP_PROM"
 
 	nodes              string = "NODES"
 	addresses          string = "ADDRESSES"
@@ -155,8 +150,11 @@ func main() {
 	skipVerification := v.GetBool(TLS_VERIFY_SKIP)
 	isTLSEnabled := v.GetBool(TLS_ENABLED)
 
-	skipVerificationProm := v.GetBool(TLS_VERIFY_SKIP_PROM)
-	isTLSEnabledProm := v.GetBool(TLS_ENABLED_PROM)
+	// Create a TLS configuration.
+	tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create TLS config")
+	}
 
 	sessHandler := auth.NewSessionHandler()
 
@@ -192,37 +190,6 @@ func main() {
 		return status.Errorf(codes.Internal, "%s", p)
 	}
 
-	// Expose Prometheus metrics endpoint.
-	// Create an HTTP server for /metrics with TLS
-	metricsServer := &http.Server{
-		Addr:    ":" + strconv.Itoa(promPort), // Choose the desired port
-		Handler: promhttp.Handler(),
-	}
-
-	if isTLSEnabledProm {
-		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerificationProm)
-		if err != nil {
-			log.Fatal().Err(err)
-		}
-
-		metricsServer.TLSConfig = tlsConfig
-	}
-
-	go func() {
-		log.Info().Int("port", promPort).Msg("Metrics server is running")
-
-		if isTLSEnabledProm {
-			if err := metricsServer.ListenAndServeTLS("", ""); err != nil {
-				log.Fatal().Err(err).Msg("Failed to start metrics server with TLS")
-			}
-			return
-		}
-
-		if err := metricsServer.ListenAndServe(); err != nil {
-			log.Fatal().Err(err).Msg("Failed to start metrics server")
-		}
-	}()
-
 	addresses := strings.Split(v.GetString(addresses), ",")
 	servers := []raft.Server{}
 
@@ -239,12 +206,6 @@ func main() {
 
 		clientOpts := []grpc.DialOption{}
 		if isTLSEnabled {
-			// Create a TLS configuration.
-			tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Failed to create TLS config")
-			}
-
 			clientOpts = append(clientOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 		} else {
 			clientOpts = append(clientOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -321,13 +282,17 @@ func main() {
 
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
+			rpc.IsLeader(raftServer),
+			rpc.AuthenticationInterceptor(authManger),
 			// Order matters e.g. tracing interceptor have to create span first for the later exemplars to work.
 			otelgrpc.UnaryServerInterceptor(),
 			srvMetrics.UnaryServerInterceptor(),
 			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
-			rpc.IsLeader(raftServer),
-			rpc.AuthenticationInterceptor(authManger),
 		),
+	}
+
+	if isTLSEnabled {
+		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
 
 	grpcServer := grpc.NewServer(opts...)
@@ -335,21 +300,19 @@ func main() {
 
 	authManger.CreateUser("sybline", auth.GenerateHash("sybline", salt))
 
-	if isTLSEnabled {
-		tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
-		if err != nil {
-			log.Fatal().Msg("Failed to generate credentials: " + err.Error())
-		}
-		opts = []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
-	}
-
 	raftServer.Start(grpcServer)
 
 	hand := handler.NewHandler(rbacManager, authManger, raftServer, salt)
 	grpcAPI := rpc.NewServer(hand)
 
 	app := rest.NewRestServer(broker, authManger, rbacManager, queueMan, raftServer, hand)
-	go app.Listen(":7878")
+	if isTLSEnabled {
+		ln, _ := net.Listen("tcp", ":7878")
+		ln = tls.NewListener(ln, tlsConfig)
+		go app.Listener(ln)
+	} else {
+		go app.Listen(":7878")
+	}
 
 	log.Info().Int("port", port).Msg("listening on port")
 	grpcServer.RegisterService(&rpc.MQEndpoints_ServiceDesc, grpcAPI)
