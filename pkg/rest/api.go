@@ -9,6 +9,7 @@ import (
 	"sybline/pkg/rbac"
 
 	"github.com/GreedyKomodoDragon/raft"
+	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 )
@@ -29,6 +30,36 @@ func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleMana
 	app.Use(func(c *fiber.Ctx) error {
 		return Authentication(c, auth)
 	})
+
+	prometheus := fiberprometheus.New("sybline")
+	prometheus.RegisterAt(app, "/metrics")
+	app.Use(prometheus.Middleware)
+
+	createV1(app, broker, auth, queueManager, rbac, hand)
+
+	return app
+}
+
+func NewTLSRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleManager, queueManager core.QueueManager, raftServer raft.Raft, hand handler.Handler) *fiber.App {
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+	})
+
+	app.Use(cors.New())
+
+	// Check if leader
+	app.Use(func(c *fiber.Ctx) error {
+		return IsLeader(c, raftServer)
+	})
+
+	// Middleware for authentication
+	app.Use(func(c *fiber.Ctx) error {
+		return Authentication(c, auth)
+	})
+
+	prometheus := fiberprometheus.New("sybline")
+	prometheus.RegisterAt(app, "/metrics")
+	app.Use(prometheus.Middleware)
 
 	createV1(app, broker, auth, queueManager, rbac, hand)
 
