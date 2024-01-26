@@ -3,9 +3,10 @@ module sybline
 go 1.21
 
 require (
-	github.com/GreedyKomodoDragon/raft v0.3.0
+	github.com/GreedyKomodoDragon/raft v0.3.1
 	github.com/GreedyKomodoDragon/sybline-go v0.2.0
 	github.com/ansrivas/fiberprometheus/v2 v2.6.1
+	github.com/gofrs/uuid v4.3.1+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.3
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/zerolog v1.31.0
@@ -26,7 +27,6 @@ require (
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gofiber/adaptor/v2 v2.2.1 // indirect
-	github.com/gofrs/uuid v4.3.1+incompatible // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.4 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect

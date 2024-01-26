@@ -691,7 +691,7 @@ func (h *handler) UnassignRole(ctx context.Context, role string, reqUsername str
 func (h *handler) sendCommand(payloadType fsm.Operation, payload interface{}, username string) (interface{}, error) {
 	jsonBytes, err := msgpack.Marshal(payload)
 	if err != nil {
-		return &fsm.ApplyResponse{}, err
+		return nil, err
 	}
 
 	obj := h.getCommandPool.GetObject()
@@ -702,7 +702,7 @@ func (h *handler) sendCommand(payloadType fsm.Operation, payload interface{}, us
 	data, err := msgpack.Marshal(obj)
 
 	if err != nil {
-		return &fsm.ApplyResponse{}, err
+		return nil, err
 	}
 
 	return h.raftServer.ApplyLog(&data, raft.DATA_LOG)
