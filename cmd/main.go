@@ -100,7 +100,7 @@ func createTLSConfig(caCertFile, certFile, keyFile string, skipVerification bool
 func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
-	var v = viper.New()
+	v := viper.New()
 	v.AutomaticEnv()
 
 	if err := v.BindEnv(confKeys...); err != nil {

@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"strconv"
 	"sybline/pkg/auth"
 	"sybline/pkg/core"
 	"sybline/pkg/handler"
@@ -17,6 +18,40 @@ func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, 
 	createAccounts(router, hand)
 	createLogin(router, authManager)
 	addBrokerRouter(router, hand)
+	addQueueRouter(router, hand)
+}
+
+func addQueueRouter(router fiber.Router, hand handler.Handler) {
+	queueRouter := router.Group("/queue")
+
+	queueRouter.Get("/fetch", func(c *fiber.Ctx) error {
+		queue := c.Query("queue")
+		if queue == "" {
+			return c.Status(fiber.StatusBadRequest).SendString("queue parameter is required")
+		}
+
+		amountStr := c.Query("amount")
+		u64, err := strconv.ParseUint(amountStr, 10, 32)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("Error parsing amount parameter")
+		}
+
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		data, err := hand.GetMessages(ctx, queue, uint32(u64))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.JSON(data)
+	})
 }
 
 type SubmitPayload struct {
