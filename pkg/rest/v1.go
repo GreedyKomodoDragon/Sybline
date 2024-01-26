@@ -8,6 +8,7 @@ import (
 	"sybline/pkg/rbac"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofrs/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,6 +20,16 @@ func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, 
 	createLogin(router, authManager)
 	addBrokerRouter(router, hand)
 	addQueueRouter(router, hand)
+}
+
+type AckRequest struct {
+	Id    string `json:"id"`
+	Queue string `json:"queue"`
+}
+
+type FetchMsg struct {
+	Id   string `json:"id"`
+	Data []byte `json:"data"`
 }
 
 func addQueueRouter(router fiber.Router, hand handler.Handler) {
@@ -50,7 +61,79 @@ func addQueueRouter(router fiber.Router, hand handler.Handler) {
 			})
 		}
 
-		return c.JSON(data)
+		// convert to uuid format
+		formattedData := []FetchMsg{}
+		for i := 0; i < len(data); i++ {
+			u, err := uuid.FromBytes(data[i].Id)
+			if err != nil {
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+
+			formattedData = append(formattedData, FetchMsg{
+				Id:   u.String(),
+				Data: data[i].Data,
+			})
+		}
+
+		return c.JSON(formattedData)
+	})
+
+	queueRouter.Put("/ack", func(c *fiber.Ctx) error {
+		var req AckRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		u, err := uuid.FromString(req.Id)
+		if err != nil {
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		if err := hand.Ack(ctx, req.Queue, u[:]); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusAccepted)
+	})
+
+	queueRouter.Put("/nack", func(c *fiber.Ctx) error {
+		var req AckRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		u, err := uuid.FromString(req.Id)
+		if err != nil {
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		if err := hand.Nack(ctx, req.Queue, u[:]); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusAccepted)
 	})
 }
 
