@@ -32,8 +32,40 @@ type FetchMsg struct {
 	Data []byte `json:"data"`
 }
 
+type CreateQueueReq struct {
+	RoutingKey string `json:"routingKey"`
+	Name       string `json:"name"`
+	Size       uint32 `json:"size"`
+	RetryLimit uint32 `json:"retryLimit"`
+	HasDLQueue bool   `json:"hasDLQueue"`
+}
+
 func addQueueRouter(router fiber.Router, hand handler.Handler) {
 	queueRouter := router.Group("/queue")
+
+	queueRouter.Post("/create", func(c *fiber.Ctx) error {
+		var req CreateQueueReq
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		if err := hand.CreateQueue(ctx, req.RoutingKey, req.Name, req.Size, req.RetryLimit, req.HasDLQueue); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusCreated)
+	})
 
 	queueRouter.Get("/fetch", func(c *fiber.Ctx) error {
 		queue := c.Query("queue")
