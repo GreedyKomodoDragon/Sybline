@@ -207,6 +207,10 @@ type AccountCredentials struct {
 	Password string `json:"password"`
 }
 
+type CreateRoleRequest struct {
+	Role string `json:"role"`
+}
+
 func createAccounts(router fiber.Router, hand handler.Handler) {
 	accountsRouter := router.Group("/accounts")
 
@@ -226,6 +230,30 @@ func createAccounts(router fiber.Router, hand handler.Handler) {
 		}
 
 		if err := hand.CreateUser(ctx, credentials.Username, credentials.Password); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusCreated)
+	})
+
+	accountsRouter.Post("/roles/create", func(c *fiber.Ctx) error {
+		var req CreateRoleRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		ctx, err := createContextFromFiberContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "unable to find context information",
+			})
+		}
+
+		if err := hand.CreateRole(ctx, req.Role); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"message": err.Error(),
 			})
