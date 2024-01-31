@@ -9,7 +9,7 @@ WORKDIR /app
 RUN go mod tidy && go build --ldflags '-w -s' -o main cmd/main.go
 
 # Final stage
-FROM alpine:3.18.2
+FROM alpine:3.19.1
 
 RUN apk --no-cache add bash curl ca-certificates && \
     apk update
