@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build an image from Dockerfile
         run: |
-          docker build -t sybline:${{ github.sha }} -f -f infra/docker/sybline.dockerfile .
+          docker build -t sybline:${{ github.sha }} -f infra/docker/sybline.dockerfile .
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build an image from Dockerfile
         run: |
-          docker build -t sybline-ubi:${{ github.sha }} -f -f infra/docker/UBI.dockerfile .
+          docker build -t sybline-ubi:${{ github.sha }} -f infra/docker/UBI.dockerfile .
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
