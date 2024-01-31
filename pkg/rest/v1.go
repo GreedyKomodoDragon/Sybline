@@ -13,6 +13,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	USER_NOT_LOGGED_IN = fiber.Map{
+		"message": "user is not logged in two",
+	}
+)
+
 func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager, hand handler.Handler, raftServer raft.Raft) {
 	router := app.Group("/api/v1")
 
@@ -395,30 +401,22 @@ func createLogin(router fiber.Router, authManager auth.AuthManager) {
 
 		username := c.Locals("username")
 		if username == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"message": "user is not logged in one",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
 		}
 
 		usernameStr, ok := username.(string)
 		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"message": "user is not logged in two",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
 		}
 
 		token := c.Locals("token")
 		if token == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"message": "user is not logged in three",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
 		}
 
 		tokenStr, ok := token.(string)
 		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"message": "user is not logged in four",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
 		}
 
 		if _, err := authManager.GetConsumerID(usernameStr, tokenStr); err != nil {
@@ -445,11 +443,41 @@ func createLogin(router fiber.Router, authManager auth.AuthManager) {
 				"message": "invalid credentials provided",
 			})
 		}
-		// Do something with the username and password (e.g., authentication)
 
 		// Respond with a message
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"token": token,
 		})
+	})
+
+	router.Post("/logout", func(c *fiber.Ctx) error {
+		username := c.Locals("username")
+		if username == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
+		}
+
+		usernameStr, ok := username.(string)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
+		}
+
+		token := c.Locals("token")
+		if token == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
+		}
+
+		tokenStr, ok := token.(string)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(USER_NOT_LOGGED_IN)
+		}
+
+		if err := authManager.LogOut(usernameStr, tokenStr); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		// Respond with a message
+		return c.SendStatus(fiber.StatusAccepted)
 	})
 }
