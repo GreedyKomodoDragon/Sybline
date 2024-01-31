@@ -445,11 +445,49 @@ func createLogin(router fiber.Router, authManager auth.AuthManager) {
 				"message": "invalid credentials provided",
 			})
 		}
-		// Do something with the username and password (e.g., authentication)
 
 		// Respond with a message
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"token": token,
 		})
+	})
+
+	router.Post("/logout", func(c *fiber.Ctx) error {
+		username := c.Locals("username")
+		if username == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"message": "user is not logged in",
+			})
+		}
+
+		usernameStr, ok := username.(string)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"message": "user is not logged in",
+			})
+		}
+
+		token := c.Locals("token")
+		if token == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"message": "user is not logged in three",
+			})
+		}
+
+		tokenStr, ok := token.(string)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"message": "user is not logged in four",
+			})
+		}
+
+		if err := authManager.LogOut(usernameStr, tokenStr); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+
+		// Respond with a message
+		return c.SendStatus(fiber.StatusAccepted)
 	})
 }
