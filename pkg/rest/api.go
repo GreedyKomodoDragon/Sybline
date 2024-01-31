@@ -35,7 +35,7 @@ func NewRestServer(broker core.Broker, auth auth.AuthManager, rbac rbac.RoleMana
 	prometheus.RegisterAt(app, "/metrics")
 	app.Use(prometheus.Middleware)
 
-	createV1(app, broker, auth, queueManager, rbac, hand)
+	createV1(app, broker, auth, queueManager, rbac, hand, raftServer)
 
 	return app
 }

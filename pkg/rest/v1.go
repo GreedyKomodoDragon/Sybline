@@ -7,15 +7,16 @@ import (
 	"sybline/pkg/handler"
 	"sybline/pkg/rbac"
 
+	"github.com/GreedyKomodoDragon/raft"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofrs/uuid"
 	"github.com/rs/zerolog/log"
 )
 
-func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager, hand handler.Handler) {
+func createV1(app *fiber.App, broker core.Broker, authManager auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager, hand handler.Handler, raftServer raft.Raft) {
 	router := app.Group("/api/v1")
 
-	createInfo(router, broker, authManager, queueManager, rbac)
+	createInfo(router, broker, authManager, queueManager, rbac, raftServer)
 	createAccounts(router, hand)
 	createLogin(router, authManager)
 	addBrokerRouter(router, hand)
@@ -326,7 +327,7 @@ func createAccounts(router fiber.Router, hand handler.Handler) {
 	})
 }
 
-func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager) {
+func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager, raftServer raft.Raft) {
 	infoRouter := router.Group("/info")
 
 	infoRouter.Get("/routing", func(c *fiber.Ctx) error {
@@ -375,6 +376,12 @@ func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, 
 		}
 
 		return c.JSON(result)
+	})
+
+	infoRouter.Get("/isLeader", func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"isLeader": raftServer.State() == raft.LEADER,
+		})
 	})
 }
 
