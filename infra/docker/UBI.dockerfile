@@ -9,7 +9,7 @@ WORKDIR /app
 RUN go mod tidy && go build --ldflags '-w -s' -o main cmd/main.go
 
 # Final stage
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.8-1072
+FROM registry.access.redhat.com/ubi9-micro:9.3-13
 
 # Copy the built binary from the builder stage
 COPY --from=builder /app/main /app/main
