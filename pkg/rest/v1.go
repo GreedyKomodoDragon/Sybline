@@ -333,6 +333,11 @@ func createAccounts(router fiber.Router, hand handler.Handler) {
 	})
 }
 
+type RouteQueueMapping struct {
+	Key    string   `json:"key"`
+	Queues []string `json:"queues"`
+}
+
 func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, queueManager core.QueueManager, rbac rbac.RoleManager, raftServer raft.Raft) {
 	infoRouter := router.Group("/info")
 
@@ -358,6 +363,25 @@ func createInfo(router fiber.Router, broker core.Broker, auth auth.AuthManager, 
 
 	infoRouter.Get("/queues", func(c *fiber.Ctx) error {
 		return c.JSON(queueManager.GetAllQueues())
+	})
+
+	infoRouter.Get("/all", func(c *fiber.Ctx) error {
+		keys := broker.GetKeys().Keys
+		out := make([]RouteQueueMapping, len(keys))
+
+		for i, key := range keys {
+			queues, err := broker.GetQueues(key)
+			if err != nil {
+				continue
+			}
+
+			out[i] = RouteQueueMapping{
+				Key:    key,
+				Queues: queues.Queues,
+			}
+		}
+
+		return c.JSON(out)
 	})
 
 	infoRouter.Get("/accounts", func(c *fiber.Ctx) error {
