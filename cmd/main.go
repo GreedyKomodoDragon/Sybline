@@ -151,9 +151,14 @@ func main() {
 	isTLSEnabled := v.GetBool(TLS_ENABLED)
 
 	// Create a TLS configuration.
-	tlsConfig, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create TLS config")
+	var tlsConfig *tls.Config
+	if isTLSEnabled {
+		tlsConf, err := createTLSConfig(caCertFile, certFile, keyFile, skipVerification)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to create TLS config")
+		}
+
+		tlsConfig = tlsConf
 	}
 
 	sessHandler := auth.NewSessionHandler()
