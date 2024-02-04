@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -28,6 +29,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	restK8s "k8s.io/client-go/rest"
 
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -45,7 +49,7 @@ const (
 	TLS_VERIFY_SKIP string = "TLS_VERIFY_SKIP"
 
 	nodes              string = "NODES"
-	addresses          string = "ADDRESSES"
+	ADDRESSES          string = "ADDRESSES"
 	SNAPSHOT_THRESHOLD string = "SNAPSHOT_THRESHOLD"
 
 	ELECTION_TIMEOUT  string = "ELECTION_TIMEOUT"
@@ -59,13 +63,18 @@ const (
 
 	NODE_TTL string = "NODE_TTL"
 	SALT     string = "SALT"
+
+	K8S_AUTO         string = "K8S_AUTO"
+	STATEFULSET_NAME string = "STATEFULSET_NAME"
+	REPLICA_COUNT    string = "REPLICA_COUNT"
+	HOST_IP          string = "HOST_IP"
 )
 
 var confKeys = []string{
 	serverPort,
 	raftNodeId,
 	nodes,
-	addresses,
+	ADDRESSES,
 	SNAPSHOT_THRESHOLD,
 	ELECTION_TIMEOUT,
 	HEARTBEAT_TIMEOUT,
@@ -108,11 +117,6 @@ func main() {
 		return
 	}
 
-	raftId := v.GetUint64(raftNodeId)
-	if raftId == 0 {
-		log.Fatal().Msg("RAFT_NODE_ID is required")
-	}
-
 	nodeTTL := v.GetInt64(NODE_TTL)
 	if nodeTTL == 0 {
 		nodeTTL = 5 * 60
@@ -143,12 +147,125 @@ func main() {
 		log.Fatal().Msg("SALT is required")
 	}
 
+	port := v.GetInt(serverPort)
+	if port == 0 {
+		port = 2221
+	}
+
 	caCertFile := "./cert/ca-cert.pem"
 	certFile := "./cert/cert.pem"
 	keyFile := "./cert/key.pem"
 
 	skipVerification := v.GetBool(TLS_VERIFY_SKIP)
 	isTLSEnabled := v.GetBool(TLS_ENABLED)
+
+	var addresses []string
+	var ids []string
+	var raftId uint64
+
+	k8sAuto := v.GetBool(K8S_AUTO)
+	if k8sAuto {
+		statefulsetName := v.GetString(STATEFULSET_NAME)
+		if statefulsetName == "" {
+			log.Fatal().Msg("statefulsetName is required if using K8S_AUTO")
+		}
+
+		replicaCount := v.GetInt(REPLICA_COUNT)
+		if replicaCount < 1 {
+			log.Fatal().Msg("REPLICA_COUNT must be greater than 0")
+		}
+
+		// creates the in-cluster config
+		config, err := restK8s.InClusterConfig()
+		if err != nil {
+			log.Fatal().Msg("Not running inside Kubernetes")
+		}
+
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Fatal().Msg("Unable to create config inside Kubernetes")
+		}
+
+		// Read the entire file into a byte slice
+		data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to get current namespace")
+		}
+
+		// Convert the byte slice to a string
+		namespace := string(data)
+		log.Info().Str("namespace", namespace).Msg("Running in Kubernetes")
+
+		// Get StatefulSet
+		statefulSets := clientset.AppsV1().StatefulSets(namespace)
+		statefulSet, err := statefulSets.Get(context.Background(), statefulsetName, v1.GetOptions{})
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to get statefulsets")
+		}
+
+		selector := v1.FormatLabelSelector(statefulSet.Spec.Selector)
+
+		// Get pods
+		for {
+			pods, err := clientset.CoreV1().Pods(statefulSet.Namespace).List(context.Background(), v1.ListOptions{
+				LabelSelector: selector,
+			})
+			if err != nil {
+				log.Fatal().Err(err).Msg("Unable to get pods")
+			}
+
+			if len(pods.Items) != replicaCount {
+				log.Info().Msg("Waiting while all pods are not ready...")
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			services, err := clientset.CoreV1().Services(statefulSet.Namespace).List(context.Background(), v1.ListOptions{
+				LabelSelector: selector,
+			})
+			if err != nil {
+				log.Fatal().Err(err).Msg("Unable to get services")
+			}
+
+			// Print pod names
+			addresses = make([]string, replicaCount-1)
+			ids = make([]string, replicaCount-1)
+			k := 0
+
+			podID, err := extractNumber(os.Getenv("HOSTNAME"))
+			if err != nil {
+				log.Fatal().Err(err).Msg("unable to get index")
+			}
+
+			raftId = podID
+
+			for i, service := range services.Items {
+				if i == int(raftId) {
+					continue
+				}
+
+				addresses[k] = service.Name + "." + namespace + ".svc.cluster.local:" + strconv.Itoa(port)
+				ids[k] = strconv.Itoa(i)
+				k++
+			}
+
+			break
+		}
+
+	} else {
+		addresses = strings.Split(v.GetString(ADDRESSES), ",")
+
+		ids = strings.Split(v.GetString(nodes), ",")
+		if len(ids) != len(addresses) {
+			log.Fatal().Msg("addresses and ids must be same length")
+		}
+
+		raftId = v.GetUint64(raftNodeId)
+		if raftId == 0 {
+			log.Fatal().Msg("RAFT_NODE_ID is required")
+		}
+
+	}
 
 	// Create a TLS configuration.
 	var tlsConfig *tls.Config
@@ -162,11 +279,6 @@ func main() {
 	}
 
 	sessHandler := auth.NewSessionHandler()
-
-	port := v.GetInt(serverPort)
-	if port == 0 {
-		port = 2221
-	}
 
 	restPort := v.GetInt(REST_PORT)
 	if restPort == 0 {
@@ -195,14 +307,7 @@ func main() {
 		return status.Errorf(codes.Internal, "%s", p)
 	}
 
-	addresses := strings.Split(v.GetString(addresses), ",")
 	servers := []raft.Server{}
-
-	ids := strings.Split(v.GetString(nodes), ",")
-	if len(ids) != len(addresses) {
-		log.Fatal().Msg("addresses and ids must be same length")
-	}
-
 	for i, address := range addresses {
 		id, err := strconv.ParseUint(ids[i], 10, 64)
 		if err != nil {
@@ -316,10 +421,32 @@ func main() {
 		ln = tls.NewListener(ln, tlsConfig)
 		go app.Listener(ln)
 	} else {
-		go app.Listen(":7878")
+		go app.Listen(":" + strconv.Itoa(restPort))
 	}
 
 	log.Info().Int("port", port).Msg("listening on port")
 	grpcServer.RegisterService(&rpc.MQEndpoints_ServiceDesc, grpcAPI)
 	grpcServer.Serve(lis)
+}
+
+func extractNumber(s string) (uint64, error) {
+	// Split the string using hyphens as separators
+	parts := strings.Split(s, "-")
+
+	// Check if there are any parts in the split result
+	if len(parts) > 0 {
+		// Get the last part, which should be the number
+		lastPart := parts[len(parts)-1]
+
+		// Convert the last part to a uint64
+		number, err := strconv.ParseUint(lastPart, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+
+		return number, nil
+	}
+
+	// No parts found
+	return 0, fmt.Errorf("no number found in the string")
 }
