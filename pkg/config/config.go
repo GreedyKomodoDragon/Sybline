@@ -80,7 +80,7 @@ func KubernetesAutoConfig(replicaCount int, podHostName string, statefulsetName 
 		pID = podID
 
 		for i, service := range services.Items {
-			if i == int(podID) {
+			if uint64(i) == podID {
 				continue
 			}
 
