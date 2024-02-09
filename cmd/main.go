@@ -172,7 +172,7 @@ func main() {
 			log.Fatal().Msg("REPLICA_COUNT must be greater than 0")
 		}
 
-		addresses, ids, raftId = config.KubernetesAutoConfig(replicaCount, statefulsetName, port)
+		addresses, ids, raftId = config.KubernetesAutoConfig(replicaCount, os.Getenv("HOSTNAME"), statefulsetName, port)
 
 	} else {
 		addresses = strings.Split(v.GetString(ADDRESSES), ",")

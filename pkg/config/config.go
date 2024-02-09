@@ -14,7 +14,7 @@ import (
 	restK8s "k8s.io/client-go/rest"
 )
 
-func KubernetesAutoConfig(replicaCount int, statefulsetName string, port int) ([]string, []string, uint64) {
+func KubernetesAutoConfig(replicaCount int, podHostName string, statefulsetName string, port int) ([]string, []string, uint64) {
 	// creates the in-cluster config
 	config, err := restK8s.InClusterConfig()
 	if err != nil {
@@ -71,11 +71,8 @@ func KubernetesAutoConfig(replicaCount int, statefulsetName string, port int) ([
 			log.Fatal().Err(err).Msg("Unable to get services")
 		}
 
-		// Print pod names
-
 		k := 0
-
-		podID, err := extractNumber(os.Getenv("HOSTNAME"))
+		podID, err := extractNumber(podHostName)
 		if err != nil {
 			log.Fatal().Err(err).Msg("unable to get index")
 		}
