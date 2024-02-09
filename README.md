@@ -62,6 +62,8 @@ The list of features are:
         * S3 Options Planned
 * Metrics
     * /metrics endpoint for prometheus (mTLS authentication only)
+* Kubernetes Auto-Configuration:
+    * With Statefulset+Services, the instance is able to find the other pods within the same namespace
 
 ## Role Based Access Control
 

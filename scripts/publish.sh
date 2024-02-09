@@ -43,7 +43,7 @@ if [ "$push" = true ]; then
     # Tag the containers as "latest" if the flag is set
     if [ "$latest" = true ]; then
         docker tag "greedykomodo/$image_name:$tag" "greedykomodo/$image_name:latest"
-        ddocker tag "greedykomodo/$image_name-ubi:$tag" "greedykomodo/$image_name-ubi:latest"
+        docker tag "greedykomodo/$image_name-ubi:$tag" "greedykomodo/$image_name-ubi:latest"
         docker push "greedykomodo/$image_name:latest"
         docker push "greedykomodo/$image_name-ubi:latest"
     fi
