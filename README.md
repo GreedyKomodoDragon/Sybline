@@ -15,6 +15,9 @@
 - [Introduction](#Introduction)
 - [Current State](#Current-State)
 - [Features](#Features)
+- [Client Languages supported](#Client-Languages-supported)
+- [Supported APIs](#Supported-APIs)
+- [Quick Start](#Quick-Start)
 - [Installation](#Installation)
 - [Development](#Development)
 - [Contributing](#contributing)
@@ -28,11 +31,9 @@ Sybline has not been designed to be a kafka-like replacement for extremely high 
 
 # Current State
 
-It is not production ready & probably should not be used in anything important. Below is the roadmap for feature that are planned to be coming to Sybline; though subject to change. Any other features are not in the pipeline and may not be added.
+It is not production ready but is become increasing ready for alpha use. Cannot ensure that there will be no application breaking bugs; use with caution currently!
 
 It does not offically support any single node implementations, you must run at least 3 nodes; see docker-compose for developer template files.
-
-Likely to have bugs and be unstable.
 
 # Features
 See docs for more information: [Sybline Docs](https://www.sybline.com)
@@ -99,6 +100,101 @@ If you have used anything like AWS IAM you should feel relatively comfortable wi
 Languages and links to offical repos:
 - [Go](https://github.com/GreedyKomodoDragon/sybline-go/tree/main)
 
+# Supported APIs
+
+Sybline has two APIs:
+
+* gRPC 
+* REST
+
+Each has functionality that is not implemented in the other e.g. REST can grab metadata whereas gRPC cannot yet.
+
+APIs will be functionally the same before v1 launch.
+
+# Quick Start
+
+If you want to just try out Sybline, here is a quick and easy docker-compose file to run a cluster.
+
+```yaml
+version: '3.1'
+
+services:
+  node_1:
+    image: greedykomodo/sybline:latest
+    hostname: node_1
+    mem_limit: 1000m
+    environment:
+      - SERVER_PORT=2221
+      - RAFT_NODE_ID=1
+      - TLS_ENABLED=false
+      - TLS_VERIFY_SKIP=false
+      - NODES=2,3
+      - ADDRESSES=node_2:2221,node_3:2221
+      - SNAPSHOT_THRESHOLD=100000
+      - HOST_IP=node_1
+      - TOKEN_DURATION=1800
+      - SALT=salty
+    ports:
+      - 2221:2221
+      - 7878:7878
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.4
+
+  node_2:
+    image: greedykomodo/sybline:latest
+    hostname: node_2
+    mem_limit: 1000m
+    environment:
+      - SERVER_PORT=2221
+      - RAFT_NODE_ID=2
+      - TLS_ENABLED=false
+      - TLS_VERIFY_SKIP=false
+      - NODES=1,3
+      - ADDRESSES=node_1:2221,node_3:2221
+      - SNAPSHOT_THRESHOLD=100000
+      - HOST_IP=node_2
+      - TOKEN_DURATION=1800
+      - SALT=salty
+    ports:
+      - 2222:2221
+      - 7879:7878
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.5
+
+  node_3:
+    image: greedykomodo/sybline:latest
+    hostname: node_3
+    mem_limit: 1000m
+    environment:
+      - SERVER_PORT=2221
+      - RAFT_NODE_ID=3
+      - TLS_ENABLED=false
+      - TLS_VERIFY_SKIP=false
+      - NODES=1,2
+      - ADDRESSES=node_1:2221,node_2:2221
+      - SNAPSHOT_THRESHOLD=100000
+      - HOST_IP=node_3
+      - TOKEN_DURATION=1800
+      - SALT=salty
+
+    ports:
+      - 2223:2221
+      - 7880:7878
+    networks:
+      webnet:
+        ipv4_address: 10.5.0.6
+
+networks:
+  webnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
+```
+
 # Installation
 
 ## Binary
@@ -133,7 +229,6 @@ We do not recommend running individual containers and connecting them up, we rec
 ### Docker Compose
 
 For development purposes, we have a series of prepared docker-compose under `infra/docker`.
-
 
 ## Helm 
 
