@@ -64,7 +64,6 @@ const (
 	K8S_AUTO         string = "K8S_AUTO"
 	STATEFULSET_NAME string = "STATEFULSET_NAME"
 	REPLICA_COUNT    string = "REPLICA_COUNT"
-	HOST_IP          string = "HOST_IP"
 )
 
 var confKeys = []string{

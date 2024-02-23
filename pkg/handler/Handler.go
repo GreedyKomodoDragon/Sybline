@@ -700,12 +700,22 @@ func (h *handler) sendCommand(payloadType fsm.Operation, payload interface{}, us
 	obj.Username = username
 
 	data, err := msgpack.Marshal(obj)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return h.raftServer.ApplyLog(&data, raft.DATA_LOG)
+	result, err := h.raftServer.ApplyLog(&data, raft.DATA_LOG)
+	if err != nil {
+		return nil, err
+	}
+
+	sybResult, ok := result.(*fsm.SyblineFSMResult)
+	if !ok {
+		fmt.Println(result)
+		return nil, fmt.Errorf("unable to convert to sybResult")
+	}
+
+	return sybResult.Data, sybResult.Err
 }
 
 func getStringFromCtx(ctx context.Context, key string) (string, error) {
