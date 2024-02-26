@@ -711,7 +711,6 @@ func (h *handler) sendCommand(payloadType fsm.Operation, payload interface{}, us
 
 	sybResult, ok := result.(*fsm.SyblineFSMResult)
 	if !ok {
-		fmt.Println(result)
 		return nil, fmt.Errorf("unable to convert to sybResult")
 	}
 
