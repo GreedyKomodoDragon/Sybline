@@ -66,9 +66,10 @@ type handler struct {
 	salt           string
 	getObjectPool  *ObjectPool[structs.RequestMessageData]
 	getCommandPool *ObjectPool[fsm.CommandPayload]
+	batcher        fsm.Batcher
 }
 
-func NewHandler(rbacManager rbac.RoleManager, authManager auth.AuthManager, raftServer raft.Raft, salt string) Handler {
+func NewHandler(rbacManager rbac.RoleManager, authManager auth.AuthManager, raftServer raft.Raft, batcher fsm.Batcher, salt string) Handler {
 	return &handler{
 		rbacManager: rbacManager,
 		authManager: authManager,
@@ -80,6 +81,7 @@ func NewHandler(rbacManager rbac.RoleManager, authManager auth.AuthManager, raft
 		getCommandPool: NewObjectPool[fsm.CommandPayload](10000, func() fsm.CommandPayload {
 			return fsm.CommandPayload{}
 		}),
+		batcher: batcher,
 	}
 }
 
@@ -704,14 +706,14 @@ func (h *handler) sendCommand(payloadType fsm.Operation, payload interface{}, us
 		return nil, err
 	}
 
-	result, err := h.raftServer.ApplyLog(&data, raft.DATA_LOG)
+	chanReturn, err := h.batcher.SendLog(&data)
 	if err != nil {
 		return nil, err
 	}
 
-	sybResult, ok := result.(*fsm.SyblineFSMResult)
-	if !ok {
-		return nil, fmt.Errorf("unable to convert to sybResult")
+	sybResult := <-chanReturn
+	if sybResult == nil {
+		return nil, fmt.Errorf("unable to process action")
 	}
 
 	return sybResult.Data, sybResult.Err

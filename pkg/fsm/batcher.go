@@ -8,7 +8,7 @@ import (
 )
 
 type Batcher interface {
-	SendLog([]byte) (chan (*SyblineFSMResult), error)
+	SendLog(*[]byte) (chan (*SyblineFSMResult), error)
 }
 
 type batcher struct {
@@ -43,7 +43,7 @@ func (b *batcher) processLogs() error {
 	for {
 		data := <-b.inputChan
 		b.dataSlice[b.currentIndex] = data
-		b.currentIndex = b.batchLength + 1%b.batchLength
+		b.currentIndex = (b.batchLength + 1) % b.batchLength
 
 		if b.currentIndex != b.batchLength {
 			continue
@@ -78,12 +78,12 @@ func (b *batcher) processLogs() error {
 	}
 }
 
-func (b *batcher) SendLog(data []byte) (chan (*SyblineFSMResult), error) {
+func (b *batcher) SendLog(data *[]byte) (chan (*SyblineFSMResult), error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
 	currentIndex := b.currentIndex
-	b.inputChan <- data
+	b.inputChan <- *data
 
 	return b.outputChans[currentIndex], nil
 }
