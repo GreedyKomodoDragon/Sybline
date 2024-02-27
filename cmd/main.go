@@ -333,7 +333,9 @@ func main() {
 
 	raftServer.Start(grpcServer)
 
-	batcher := fsm.NewBatcher(raftServer, 5)
+	batcher := fsm.NewBatcher(raftServer, 1)
+	go batcher.ProcessLogs()
+
 	hand := handler.NewHandler(rbacManager, authManger, raftServer, batcher, salt)
 	grpcAPI := rpc.NewServer(hand)
 

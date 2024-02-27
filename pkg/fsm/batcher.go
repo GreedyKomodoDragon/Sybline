@@ -9,16 +9,23 @@ import (
 
 type Batcher interface {
 	SendLog(*[]byte) (chan (*SyblineFSMResult), error)
+	ProcessLogs()
+}
+
+type DataIndex struct {
+	data []byte
+	id   int
 }
 
 type batcher struct {
 	raftServer   raft.Raft
-	inputChan    chan []byte
+	inputChan    chan *DataIndex
 	currentIndex int
 	dataSlice    [][]byte
 	batchLength  int
 	outputChans  []chan (*SyblineFSMResult)
 	lock         *sync.Mutex
+	wait         *sync.WaitGroup
 }
 
 func NewBatcher(raftServer raft.Raft, batchLength int) Batcher {
@@ -29,29 +36,34 @@ func NewBatcher(raftServer raft.Raft, batchLength int) Batcher {
 
 	return &batcher{
 		raftServer:   raftServer,
-		inputChan:    make(chan []byte, batchLength),
+		inputChan:    make(chan *DataIndex, batchLength),
 		currentIndex: 0,
 		dataSlice:    make([][]byte, batchLength),
 		batchLength:  batchLength,
 		outputChans:  chans,
 		lock:         &sync.Mutex{},
+		wait:         &sync.WaitGroup{},
 	}
 }
 
-func (b *batcher) processLogs() error {
+func (b *batcher) ProcessLogs() {
 
+	// TODO: Need to add a timer if not enough logs pushed in
 	for {
 		data := <-b.inputChan
-		b.dataSlice[b.currentIndex] = data
-		b.currentIndex = (b.batchLength + 1) % b.batchLength
-
-		if b.currentIndex != b.batchLength {
+		b.dataSlice[data.id] = data.data
+		if b.currentIndex != (b.batchLength - 1) {
+			b.wait.Done()
 			continue
 		}
 
 		b.currentIndex = 0
 
-		marshalledSlice, err := msgpack.Marshal(b.dataSlice)
+		datas := b.dataSlice
+		b.dataSlice = make([][]byte, b.batchLength)
+		b.wait.Done()
+
+		marshalledSlice, err := msgpack.Marshal(datas)
 		if err != nil {
 			for i := 0; i < b.batchLength; i++ {
 				b.outputChans[i] <- nil
@@ -83,7 +95,16 @@ func (b *batcher) SendLog(data *[]byte) (chan (*SyblineFSMResult), error) {
 	defer b.lock.Unlock()
 
 	currentIndex := b.currentIndex
-	b.inputChan <- *data
+	b.currentIndex = (b.batchLength + 1) % b.batchLength
+
+	b.wait.Add(1)
+
+	b.inputChan <- &DataIndex{
+		data: *data,
+		id:   currentIndex,
+	}
+
+	b.wait.Wait()
 
 	return b.outputChans[currentIndex], nil
 }
