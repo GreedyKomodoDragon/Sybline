@@ -333,7 +333,7 @@ func main() {
 
 	raftServer.Start(grpcServer)
 
-	batcher := fsm.NewBatcher(raftServer, 1)
+	batcher := fsm.NewBatcher(raftServer, 50)
 	go batcher.ProcessLogs()
 
 	hand := handler.NewHandler(rbacManager, authManger, raftServer, batcher, salt)
