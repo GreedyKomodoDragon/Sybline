@@ -58,20 +58,24 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 
 	results := []*SyblineFSMResult{}
 	for i := 0; i < len(data); i++ {
-		results = append(results, b.applySingle(data[i]))
+		if len(data[i]) == 0 {
+			continue
+		}
+
+		results = append(results, b.applySingle(data[i], len(data), i))
 	}
 
 	return results, nil
 }
 
-func (b syblineFSM) applySingle(data []byte) *SyblineFSMResult {
+func (b syblineFSM) applySingle(data []byte, length, i int) *SyblineFSMResult {
 	payload := b.commandPayload
 	defer payload.Reset()
 
 	result := &SyblineFSMResult{}
 
 	if err := msgpack.Unmarshal(data, &payload); err != nil {
-		log.Error().Err(err).Msg("issue marshalling store payload")
+		log.Error().Bytes("data", data).Int("length", length).Int("i", i).Err(err).Msg("issue marshalling store payload")
 		result.Err = err
 		return result
 	}
