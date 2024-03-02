@@ -55,6 +55,7 @@ const (
 	STREAM_BUILD_TIMEOUT  string = "STREAM_BUILD_TIMEOUT"
 	STREAM_BUILD_ATTEMPTS string = "STREAM_BUILD_ATTEMPTS"
 	APPEND_TIMEOUT        string = "APPEND_TIMEOUT"
+	RAFT_BATCH_LIMIT      string = "RAFT_BATCH_LIMIT"
 
 	TOKEN_DURATION string = "TOKEN_DURATION"
 
@@ -136,6 +137,11 @@ func main() {
 	appendTimeout := v.GetInt(APPEND_TIMEOUT)
 	if appendTimeout == 0 {
 		appendTimeout = 3
+	}
+
+	raftBatchLimit := v.GetInt(RAFT_BATCH_LIMIT)
+	if raftBatchLimit == 0 {
+		raftBatchLimit = 1000
 	}
 
 	salt := v.GetString(SALT)
@@ -290,7 +296,7 @@ func main() {
 		log.Fatal().Err(err)
 	}
 
-	logStore, err := raft.NewLogStore(snapshotThreshold)
+	logStore, err := raft.NewLogGlobStore(snapshotThreshold)
 	if err != nil {
 		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
@@ -333,7 +339,7 @@ func main() {
 
 	raftServer.Start(grpcServer)
 
-	batcher := fsm.NewBatcher(raftServer, 1000)
+	batcher := fsm.NewBatcher(raftServer, raftBatchLimit)
 	go batcher.ProcessLogs()
 
 	hand := handler.NewHandler(rbacManager, authManger, raftServer, batcher, salt)
