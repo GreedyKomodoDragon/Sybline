@@ -8,16 +8,19 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
+// Batcher represents the interface for sending and processing logs in batches.
 type Batcher interface {
 	SendLog(*[]byte) (chan (*SyblineFSMResult), error)
 	ProcessLogs()
 }
 
+// DataIndex represents the data structure holding the raw data and its identifier.
 type DataIndex struct {
 	data []byte
 	id   int
 }
 
+// batcher is the concrete implementation of the Batcher interface.
 type batcher struct {
 	raftServer    raft.Raft
 	inputChan     chan *DataIndex
@@ -31,6 +34,7 @@ type batcher struct {
 	batchLock     *sync.Mutex
 }
 
+// NewBatcher creates a new Batcher with the specified Raft server and batch length.
 func NewBatcher(raftServer raft.Raft, batchLength int) Batcher {
 	chans := make([]chan *SyblineFSMResult, batchLength)
 	for i := 0; i < batchLength; i++ {
@@ -53,6 +57,7 @@ func NewBatcher(raftServer raft.Raft, batchLength int) Batcher {
 	}
 }
 
+// ProcessLogs starts goroutines to process and send logs in batches.
 func (b *batcher) ProcessLogs() {
 	go func() {
 		for {
@@ -115,9 +120,9 @@ func (b *batcher) ProcessLogs() {
 			b.timer.Reset(50 * time.Millisecond)
 		}
 	}()
-
 }
 
+// sendLogs sends the batched logs to the Raft server and processes the results.
 func (b *batcher) sendLogs(datas *[][]byte, outputs *[]chan *SyblineFSMResult) {
 	marshalledSlice, err := msgpack.Marshal(*datas)
 	if err != nil {
@@ -148,6 +153,7 @@ func (b *batcher) sendLogs(datas *[][]byte, outputs *[]chan *SyblineFSMResult) {
 	}
 }
 
+// SendLog sends a log entry to the batcher and returns the corresponding output channel.
 func (b *batcher) SendLog(data *[]byte) (chan (*SyblineFSMResult), error) {
 	indexData := &DataIndex{
 		data: *data,
