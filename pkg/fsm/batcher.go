@@ -8,6 +8,8 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
+const duration = 50 * time.Millisecond
+
 // Batcher represents the interface for sending and processing logs in batches.
 type Batcher interface {
 	SendLog(*[]byte) (chan (*SyblineFSMResult), error)
@@ -41,7 +43,7 @@ func NewBatcher(raftServer raft.Raft, batchLength int) Batcher {
 		chans[i] = make(chan *SyblineFSMResult, 1)
 	}
 
-	timer := time.NewTimer(500 * time.Millisecond)
+	timer := time.NewTimer(duration)
 
 	return &batcher{
 		raftServer:    raftServer,
@@ -97,7 +99,7 @@ func (b *batcher) ProcessLogs() {
 			// If no items in the slice
 			if b.dataSlice[0] == nil {
 				b.batchLock.Unlock()
-				b.timer.Reset(50 * time.Millisecond)
+				b.timer.Reset(duration)
 				continue
 			}
 
@@ -117,7 +119,7 @@ func (b *batcher) ProcessLogs() {
 
 			b.sendLogs(&datas, &outputs)
 			b.batchLock.Unlock()
-			b.timer.Reset(50 * time.Millisecond)
+			b.timer.Reset(duration)
 		}
 	}()
 }
