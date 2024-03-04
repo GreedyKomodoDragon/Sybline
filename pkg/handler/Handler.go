@@ -64,8 +64,8 @@ type handler struct {
 	authManager    auth.AuthManager
 	raftServer     raft.Raft
 	salt           string
-	getObjectPool  *ObjectPool[structs.RequestMessageData]
-	getCommandPool *ObjectPool[fsm.CommandPayload]
+	getObjectPool  *structs.ObjectPool[structs.RequestMessageData]
+	getCommandPool *structs.ObjectPool[fsm.CommandPayload]
 	batcher        fsm.Batcher
 }
 
@@ -75,10 +75,10 @@ func NewHandler(rbacManager rbac.RoleManager, authManager auth.AuthManager, raft
 		authManager: authManager,
 		raftServer:  raftServer,
 		salt:        salt,
-		getObjectPool: NewObjectPool[structs.RequestMessageData](10000, func() structs.RequestMessageData {
+		getObjectPool: structs.NewObjectPool[structs.RequestMessageData](10000, func() structs.RequestMessageData {
 			return structs.RequestMessageData{}
 		}),
-		getCommandPool: NewObjectPool[fsm.CommandPayload](10000, func() fsm.CommandPayload {
+		getCommandPool: structs.NewObjectPool[fsm.CommandPayload](10000, func() fsm.CommandPayload {
 			return fsm.CommandPayload{}
 		}),
 		batcher: batcher,

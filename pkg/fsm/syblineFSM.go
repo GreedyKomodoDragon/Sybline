@@ -13,8 +13,6 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-var BREAK_SYMBOL = []byte("§")
-
 type SyblineFSMResult struct {
 	Data interface{}
 	Err  error
