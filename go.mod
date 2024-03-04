@@ -3,7 +3,7 @@ module sybline
 go 1.21
 
 require (
-	github.com/GreedyKomodoDragon/raft v0.3.1
+	github.com/GreedyKomodoDragon/raft v0.3.2
 	github.com/GreedyKomodoDragon/sybline-go v0.2.0
 	github.com/ansrivas/fiberprometheus/v2 v2.6.1
 	github.com/gofrs/uuid v4.3.1+incompatible
