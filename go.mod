@@ -14,7 +14,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.0
 	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 	k8s.io/apimachinery v0.29.1
 	k8s.io/client-go v0.29.1
 )
