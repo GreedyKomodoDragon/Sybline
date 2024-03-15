@@ -61,6 +61,8 @@ const (
 
 	NODE_TTL string = "NODE_TTL"
 	SALT     string = "SALT"
+	AES_KEY  string = "AES_KEY"
+	AES_IV   string = "AES_IV"
 
 	K8S_AUTO         string = "K8S_AUTO"
 	STATEFULSET_NAME string = "STATEFULSET_NAME"
@@ -296,9 +298,19 @@ func main() {
 		log.Fatal().Err(err)
 	}
 
-	logStore, err := fsm.NewEcryptedLogStore(snapshotThreshold)
-	if err != nil {
-		log.Fatal().Msg("failed to create logstore: " + err.Error())
+	var logStore raft.LogStore
+	if len(v.GetString(AES_KEY)) == 16 && len(v.GetString(AES_KEY)) == len(v.GetString(AES_IV)) {
+		logStore, err = fsm.NewEcryptedLogStore(snapshotThreshold, []byte(v.GetString(AES_KEY)), []byte(v.GetString(AES_IV)))
+		if err != nil {
+			log.Fatal().Msg("failed to create logstore: " + err.Error())
+		}
+
+		log.Info().Msg("encryted logstore enabled")
+	} else {
+		logStore, err = raft.NewLogGlobStore(snapshotThreshold)
+		if err != nil {
+			log.Fatal().Msg("failed to create logstore: " + err.Error())
+		}
 	}
 
 	raftServer := raft.NewRaftServer(fsmStore, logStore, &raft.Configuration{

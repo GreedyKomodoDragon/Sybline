@@ -25,9 +25,11 @@ type ecryptedLogStore struct {
 	threshold  uint64
 	currBatch  uint64
 	persistMux *sync.Mutex
+	key        []byte
+	iv         []byte
 }
 
-func NewEcryptedLogStore(threshold uint64) (raft.LogStore, error) {
+func NewEcryptedLogStore(threshold uint64, key, iv []byte) (raft.LogStore, error) {
 	// log directory - Create a folder/directory at a full qualified path
 	if err := os.MkdirAll(raft.LOG_DIR, 0755); err != nil && !strings.Contains(err.Error(), "file exists") {
 		return nil, err
@@ -43,6 +45,8 @@ func NewEcryptedLogStore(threshold uint64) (raft.LogStore, error) {
 		threshold:  threshold,
 		persistMux: &sync.Mutex{},
 		piping:     false,
+		key:        key,
+		iv:         iv,
 	}, nil
 }
 
@@ -138,17 +142,14 @@ func (l *ecryptedLogStore) readLogsFromDisk(location string) (*[]*raft.Log, erro
 
 	defer file.Close()
 
-	// Create a new AES cipher block using the same key and IV used for encryption
-	key := []byte("16bytekeyforencr") // Example key (should be 16, 24, or 32 bytes)
-	iv := []byte("16byteinitialvec")  // Example IV (should be 16 bytes)
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher(l.key)
 	if err != nil {
 		log.Error().Err(err).Msg("unable to create new cipher for reading in logs")
 		return nil, err
 	}
 
 	// Create a stream cipher using the AES block and IV
-	stream := cipher.NewCFBDecrypter(block, iv)
+	stream := cipher.NewCFBDecrypter(block, l.iv)
 	reader := &cipher.StreamReader{S: stream, R: file}
 
 	decoder := gob.NewDecoder(reader)
@@ -263,16 +264,14 @@ func (l *ecryptedLogStore) persistLog() error {
 		}
 
 		// Create a new AES cipher block using a key and IV
-		key := []byte("16bytekeyforencr") // Example key (should be 16, 24, or 32 bytes)
-		iv := []byte("16byteinitialvec")  // Example IV (should be 16 bytes)
-		block, err := aes.NewCipher(key)
+		block, err := aes.NewCipher(l.key)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to create new Cipher")
 			return err
 		}
 
 		// Create a stream cipher using the AES block and IV
-		stream := cipher.NewCFBEncrypter(block, iv)
+		stream := cipher.NewCFBEncrypter(block, l.iv)
 		writer := &cipher.StreamWriter{S: stream, W: f}
 
 		encoder := gob.NewEncoder(writer)
