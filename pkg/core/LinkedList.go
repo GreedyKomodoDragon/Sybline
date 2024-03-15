@@ -297,28 +297,29 @@ func (ll *LinkedList) UnlockAndEmptyBatch(consumerID []byte, ids [][]byte) error
 		return fmt.Errorf("could not all ids to ack")
 	}
 
-	if len(nodes) != len(ids) {
-		if len(nodes) == 1 {
-			next := ll.Head.Next
-			ll.Head.Next = nodes[0]
-			nodes[0].Next = next
-			return fmt.Errorf("could not all ids to ack")
-		}
+	if len(nodes) == len(ids) {
+		return nil
+	}
 
-		current := nodes[0]
-		for i := 1; i < len(nodes); i++ {
-			current.Next = nodes[i]
-			current = current.Next
-		}
-
+	if len(nodes) == 1 {
 		next := ll.Head.Next
 		ll.Head.Next = nodes[0]
-		nodes[len(nodes)-1].Next = next
-
+		nodes[0].Next = next
 		return fmt.Errorf("could not all ids to ack")
 	}
 
-	return nil
+	start := nodes[0]
+	for i := 1; i < len(nodes); i++ {
+		start.Next = nodes[i]
+		start = current.Next
+	}
+
+	next := ll.Head.Next
+	ll.Head.Next = nodes[0]
+	nodes[len(nodes)-1].Next = next
+
+	return fmt.Errorf("could not all ids to ack")
+
 }
 
 type pairNode struct {
