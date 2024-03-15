@@ -60,13 +60,13 @@ func (b syblineFSM) Apply(lg raft.Log) (interface{}, error) {
 			continue
 		}
 
-		results = append(results, b.applySingle(data[i], len(data), i))
+		results = append(results, b.applySingle(data[i], len(data), i, lg.Index))
 	}
 
 	return results, nil
 }
 
-func (b syblineFSM) applySingle(data []byte, length, i int) *SyblineFSMResult {
+func (b syblineFSM) applySingle(data []byte, length, i int, index uint64) *SyblineFSMResult {
 	payload := b.commandPayload
 	defer payload.Reset()
 

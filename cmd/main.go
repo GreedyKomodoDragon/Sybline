@@ -296,7 +296,7 @@ func main() {
 		log.Fatal().Err(err)
 	}
 
-	logStore, err := raft.NewLogGlobStore(snapshotThreshold)
+	logStore, err := fsm.NewEcryptedLogStore(snapshotThreshold)
 	if err != nil {
 		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
