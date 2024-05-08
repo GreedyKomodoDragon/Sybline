@@ -283,7 +283,7 @@ func main() {
 
 	snapshotThreshold := v.GetUint64(SNAPSHOT_THRESHOLD)
 	if snapshotThreshold == 0 {
-		snapshotThreshold = 10000
+		snapshotThreshold = 10
 	}
 
 	rbacManager := rbac.NewRoleManager()
@@ -296,7 +296,7 @@ func main() {
 		log.Fatal().Err(err)
 	}
 
-	logStore, err := raft.NewLogGlobStore(snapshotThreshold)
+	logStore, err := fsm.NewBinaryLogStore(snapshotThreshold)
 	if err != nil {
 		log.Fatal().Msg("failed to create logstore: " + err.Error())
 	}
