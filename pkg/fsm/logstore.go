@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -14,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type binaryStore struct {
+type BinaryStore struct {
 	logs   *safeMap
 	index  uint64
 	term   uint64
@@ -35,7 +36,7 @@ func NewBinaryLogStore(threshold uint64) (raft.LogStore, error) {
 		return nil, err
 	}
 
-	return &binaryStore{
+	return &BinaryStore{
 		logs: &safeMap{
 			make(map[uint64]*raft.Log),
 			sync.RWMutex{},
@@ -48,7 +49,7 @@ func NewBinaryLogStore(threshold uint64) (raft.LogStore, error) {
 	}, nil
 }
 
-func (l *binaryStore) AppendLog(log *raft.Log) error {
+func (l *BinaryStore) AppendLog(log *raft.Log) error {
 	if l.logs == nil {
 		return fmt.Errorf("missing slice")
 	}
@@ -59,7 +60,7 @@ func (l *binaryStore) AppendLog(log *raft.Log) error {
 	return nil
 }
 
-func (l *binaryStore) SetLog(index uint64, log *raft.Log) error {
+func (l *BinaryStore) SetLog(index uint64, log *raft.Log) error {
 	if l.logs == nil {
 		return fmt.Errorf("missing slice")
 	}
@@ -68,7 +69,7 @@ func (l *binaryStore) SetLog(index uint64, log *raft.Log) error {
 	return nil
 }
 
-func (l *binaryStore) GetLog(index uint64) (*raft.Log, error) {
+func (l *BinaryStore) GetLog(index uint64) (*raft.Log, error) {
 	if l.logs == nil {
 		return nil, fmt.Errorf("missing slice")
 	}
@@ -120,7 +121,7 @@ func (l *binaryStore) GetLog(index uint64) (*raft.Log, error) {
 	}
 	defer file.Close()
 
-	logs, err := l.readLogs(file)
+	logs, err := l.ReadLogs(file)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +137,7 @@ func (l *binaryStore) GetLog(index uint64) (*raft.Log, error) {
 	return nil, fmt.Errorf("cannot find log: %v", index)
 }
 
-func (l *binaryStore) UpdateCommited(index uint64) (bool, error) {
+func (l *BinaryStore) UpdateCommited(index uint64) (bool, error) {
 	if l.logs == nil {
 		return false, fmt.Errorf("missing slice")
 	}
@@ -160,7 +161,7 @@ func (l *binaryStore) UpdateCommited(index uint64) (bool, error) {
 }
 
 // writes the current batch of logs to disk
-func (l *binaryStore) persistLog() error {
+func (l *BinaryStore) persistLog() error {
 	l.persistMux.Lock()
 	defer l.persistMux.Unlock()
 
@@ -233,20 +234,6 @@ func (l *binaryStore) persistLog() error {
 			return err
 		}
 
-		for i := lower; i <= upper; i++ {
-			lg, err := l.GetLog(i)
-			if err != nil {
-				log.Error().Uint64("index", i).Err(err).Msg("failed to get log when persisting")
-				f.Close()
-				return err
-			}
-
-			if err := l.writeLog(f, lg); err != nil {
-				log.Error().Uint64("index", i).Err(err).Msg("failed to write log to file")
-				return err
-			}
-		}
-
 		f.Close()
 		// delete logs after
 		l.deleteRange(0, upper)
@@ -255,7 +242,7 @@ func (l *binaryStore) persistLog() error {
 	return nil
 }
 
-func (l *binaryStore) RestoreLogs(app raft.ApplicationApply) error {
+func (l *BinaryStore) RestoreLogs(app raft.ApplicationApply) error {
 	dir, err := os.ReadDir(raft.LOG_DIR)
 	if err != nil {
 		log.Error().Err(err).Msg("unable to read directory when restoring logs")
@@ -282,7 +269,7 @@ func (l *binaryStore) RestoreLogs(app raft.ApplicationApply) error {
 		}
 		defer file.Close()
 
-		logs, err := l.readLogs(file)
+		logs, err := l.ReadLogs(file)
 		if err != nil {
 			return err
 		}
@@ -308,7 +295,7 @@ func (l *binaryStore) RestoreLogs(app raft.ApplicationApply) error {
 	return nil
 }
 
-func (l *binaryStore) ApplyFrom(index uint64, app raft.ApplicationApply) {
+func (l *BinaryStore) ApplyFrom(index uint64, app raft.ApplicationApply) {
 	for {
 		log, ok := l.logs.Get(index)
 		if !ok {
@@ -326,64 +313,35 @@ func (l *binaryStore) ApplyFrom(index uint64, app raft.ApplicationApply) {
 	}
 }
 
-func (l *binaryStore) IncrementIndex() {
+func (l *BinaryStore) IncrementIndex() {
 	l.index++
 }
 
-func (l *binaryStore) IncrementTerm() {
+func (l *BinaryStore) IncrementTerm() {
 	l.term++
 }
 
-func (l *binaryStore) GetLatestIndex() uint64 {
+func (l *BinaryStore) GetLatestIndex() uint64 {
 	return l.index
 }
 
-func (l *binaryStore) GetLatestTerm() uint64 {
+func (l *BinaryStore) GetLatestTerm() uint64 {
 	return l.term
 }
 
-func (l *binaryStore) deleteRange(start, finish uint64) {
+func (l *BinaryStore) deleteRange(start, finish uint64) {
 	l.logs.DeleteRange(start, finish)
 }
 
-func (l *binaryStore) IsPiping() bool {
+func (l *BinaryStore) IsPiping() bool {
 	return l.piping
 }
 
-func (l *binaryStore) SetPiping(isPiping bool) {
+func (l *BinaryStore) SetPiping(isPiping bool) {
 	l.piping = isPiping
 }
 
-func (l *binaryStore) writeLog(file *os.File, log *raft.Log) error {
-	// Write version
-	if err := binary.Write(file, binary.BigEndian, currentVersion); err != nil {
-		return err
-	}
-
-	// Write log data
-	if err := binary.Write(file, binary.BigEndian, log.Term); err != nil {
-		return err
-	}
-	if err := binary.Write(file, binary.BigEndian, log.Index); err != nil {
-		return err
-	}
-	if err := binary.Write(file, binary.BigEndian, log.LogType); err != nil {
-		return err
-	}
-	if err := binary.Write(file, binary.BigEndian, uint64(len(log.Data))); err != nil {
-		return err
-	}
-	if _, err := file.Write(log.Data); err != nil {
-		return err
-	}
-	if err := binary.Write(file, binary.BigEndian, log.LeaderCommited); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (l *binaryStore) WriteLogs(filename string, bufferSize int, batchSize, lower, upper uint64) error {
+func (l *BinaryStore) WriteLogs(filename string, bufferSize int, batchSize, lower, upper uint64) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -394,15 +352,15 @@ func (l *binaryStore) WriteLogs(filename string, bufferSize int, batchSize, lowe
 	buffer := bytes.NewBuffer(make([]byte, 0, bufferSize))
 
 	for i := lower; i <= upper; i++ {
-		lg, err := l.GetLog(i)
-		if err != nil {
-			log.Error().Uint64("index", i).Err(err).Msg("failed to get log when persisting")
+		lg, ok := l.logs.Get(i)
+		if !ok {
+			log.Error().Uint64("index", i).Msg("failed to get log when persisting")
 			return err
 		}
 
 		// Serialize log entry
 		// Write version
-		if err := binary.Write(file, binary.BigEndian, currentVersion); err != nil {
+		if err := binary.Write(buffer, binary.BigEndian, currentVersion); err != nil {
 			return err
 		}
 
@@ -425,53 +383,58 @@ func (l *binaryStore) WriteLogs(filename string, bufferSize int, batchSize, lowe
 			return err
 		}
 
-		// Write buffered data to file if batch size is reached or it's the last log entry
-		if ((i-upper)+1)%batchSize == 0 || i == upper {
+		// Write to file if batch size is reached or it's the last log entry
+		if (i-lower+1)%batchSize == 0 || i == upper {
+			// Write the valid portion of the buffer to the file
 			if _, err := file.Write(buffer.Bytes()); err != nil {
 				return err
 			}
+
 			// Reset the buffer for reuse
 			buffer.Reset()
-			// Reset buffer size to conserve memory
-			buffer.Grow(bufferSize)
 		}
 	}
 
 	return nil
 }
 
-func (l *binaryStore) readLogs(file *os.File) ([]raft.Log, error) {
+func (l *BinaryStore) ReadLogs(file *os.File) ([]raft.Log, error) {
 	var logs []raft.Log
-	var log raft.Log
 
 	for {
 		// Read version
 		var version uint8
 		if err := binary.Read(file, binary.BigEndian, &version); err != nil {
-			break
+			if err == io.EOF {
+				break // End of file
+			}
+			return nil, err
 		}
+
+		var log raft.Log
 
 		// Read log data
 		if err := binary.Read(file, binary.BigEndian, &log.Term); err != nil {
-			break
+			return nil, err
 		}
 		if err := binary.Read(file, binary.BigEndian, &log.Index); err != nil {
-			break
+			return nil, err
 		}
 		if err := binary.Read(file, binary.BigEndian, &log.LogType); err != nil {
-			break
+			return nil, err
 		}
 		var dataLength uint64
 		if err := binary.Read(file, binary.BigEndian, &dataLength); err != nil {
-			break
+			return nil, err
 		}
 		log.Data = make([]byte, dataLength)
 		if _, err := file.Read(log.Data); err != nil {
-			break
+			return nil, err
 		}
 		if err := binary.Read(file, binary.BigEndian, &log.LeaderCommited); err != nil {
-			break
+			return nil, err
 		}
+
 		logs = append(logs, log)
 	}
 
